@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <head>
+    <title>${appName}</title>
+    <style>
+      :root {
+        --gradient-primary: linear-gradient(
+          45deg,
+          rgb(192, 203, 255) 0%,
+          rgb(255, 156, 175) 100%
+        );
+        --gradient-secondary: linear-gradient(
+          45deg,
+          rgb(255, 128, 153) 0%,
+          rgb(112, 136, 255) 100%
+        );
+      }
+
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+      }
+
+      #container {
+        display: flex;
+        height: 100vh;
+        transition: flex 0.2s ease;
+      }
+
+      #markdown,
+      #threejs {
+        overflow: auto;
+        transition: flex 0.2s ease;
+      }
+
+      #markdown {
+        flex: 2;
+        padding: 60px 20px 0px 20px;
+        background: var(--gradient-primary);
+      }
+
+      #threejs {
+        flex: 4;
+        position: relative; /* Ensure GUI positions relative to this container */
+      }
+
+      #menu-btn {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
+        border-radius: 10%;
+        width: 50px;
+        height: 50px;
+        background: var(--gradient-primary);
+        color: white;
+      }
+
+      #menu-btn:before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: var(--gradient-secondary);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        border-radius: inherit;
+      }
+
+      #menu-btn:hover:before {
+        opacity: 0.5;
+      }
+
+      .hide-sidebar #markdown {
+        flex: 0; /* Small but non-zero value for smooth transition */
+        padding: 0; /* Adjust padding to avoid content overflow */
+        overflow: hidden;
+        transition: flex 0.2s ease, padding 0.3s ease;
+      }
+      .hide-sidebar #threejs {
+        flex: 6; /* Adjust to fill the space */
+        transition: flex 0.2s ease;
+      }
+
+      #home-btn {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        z-index: 1;
+        border-radius: 10%;
+        width: 50px;
+        height: 50px;
+        background: var(--gradient-primary);
+        color: white;
+        font-size: 18px;
+        text-align: center;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      #home-btn:before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: var(--gradient-secondary);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        border-radius: inherit;
+      }
+
+      #home-btn:hover:before {
+        opacity: 0.5;
+      }
+      @media (max-width: 768px) {
+        #container {
+          flex-direction: column;
+        }
+
+        #markdown {
+          flex: 1;
+          padding: 60px 10px;
+        }
+
+        #threejs {
+          flex: 4;
+          position: relative;
+        }
+
+        #menu-btn {
+          width: 30px;
+          height: 30px;
+          top: 10px;
+          left: 10px;
+        }
+        #home-btn {
+          width: 30px;
+          height: 30px;
+          bottom: 10px;
+          right: 10px;
+          font-size: 12px;
+          text-align: center;
+        }
+      }
+    </style>
+    <script>
+      MathJax = {
+        tex: {
+          inlineMath: [
+            ["$", "$"],
+            ["\\(", "\\)"],
+          ],
+        },
+      };
+    </script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"
+    ></script>
+    <script
+      type="module"
+      src="https://cdn.jsdelivr.net/gh/zerodevx/zero-md@2/dist/zero-md.min.js"
+    ></script>
+  </head>
+  <body>
+    <button id="home-btn">🏠</button>
+    <button id="menu-btn">☰</button>
+    <div id="container">
+      <div id="markdown">
+        <!-- NOTES_SRC_PLACEHOLDER -->
+      </div>
+      <div id="threejs"></div>
+      <!-- APP_NAME_PLACEHOLDER -->
+    </div>
+
+    <script>
+      const menuBtn = document.getElementById("menu-btn");
+      const homeBtn = document.getElementById("home-btn");
+      const container = document.getElementById("container");
+      const markdown = document.getElementById("markdown");
+
+      menuBtn.addEventListener("click", () => {
+        container.classList.toggle("hide-sidebar");
+
+        // Listen for the end of the transition
+        markdown.addEventListener(
+          "transitionend",
+          () => {
+            requestAnimationFrame(() => {
+              // Force a resize event for Three.js canvas
+              window.dispatchEvent(new Event("resize"));
+
+              // Ensure the #threejs container fills the available space
+              const threeJsContainer = document.getElementById("threejs");
+              const canvas = threeJsContainer.querySelector("canvas");
+              if (canvas) {
+                canvas.style.width = "100%";
+                canvas.style.height = "100%";
+              }
+            });
+          },
+          { once: true } // Ensures the event listener is only triggered once
+        );
+      });
+
+      homeBtn.addEventListener("click", () => {
+        window.location.href = "/";
+      });
+    </script>
+  </body>
+</html>
