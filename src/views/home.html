@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <head>
     <title>Home</title>
     <style>
@@ -8,63 +8,90 @@
         font-family: Arial, sans-serif;
         margin: 0;
         padding: 0;
-        background: linear-gradient(90deg,   rgb(192, 203, 255), rgb(255, 156, 175));
-      }
-      h1 {
-        text-align: center;
-        color: #fff;
-        background: linear-gradient(45deg, #3f5efb, #fc466b);
-        margin: 0;
+        background: linear-gradient(90deg, #EEEEEE, #EEEEEE);
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        flex-wrap: wrap;
         padding: 1rem;
       }
+    
+      h1 {
+        text-align: center;
+        color: #00ADB5;
+        margin: 0;
+        padding: 1rem;
+        width: 100%;
+      }
+    
+      .column {
+        max-width: 500px;
+        margin: 1rem;
+        background: #EEEEEE;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        padding: 1rem;
+        flex-grow: 1;
+      }
+    
+      h2 {
+        text-align: center;
+        margin: 0 0 1rem 0;
+        color: #00ADB5;
+      }
+    
       ul {
         list-style: none;
         padding: 0;
-        max-width: 600px;
-        margin: 2rem auto;
+        margin: 0;
       }
+    
       li {
-        margin: 1rem 0;
+        margin: 0.5rem 0;
         text-align: center;
       }
+    
       a {
         text-decoration: none;
-        color: #3f5efb;
+        color: #00ADB5;
         font-size: 1.2em;
         padding: 0.5rem 1rem;
-        border: 2px solid #3f5efb;
+        border: 2px solid #00ADB5;
         border-radius: 8px;
         display: inline-block;
         transition: background 0.3s, color 0.3s;
       }
+    
       a:hover {
-        background: linear-gradient(
-          45deg,
-          rgb(255, 128, 153),
-          rgb(112, 136, 255)
-        );
-        color: white;
+        background: #00adb5;
+        color: #EEEEEE;
       }
+    
       @media (max-width: 768px) {
-  ul {
-    padding: 0 10px;
-  }
-  
-  li {
-    margin: 0.5rem 0;
-  }
-  
-  a {
-    font-size: 1em;
-    padding: 0.4rem 0.8rem;
-  }
-}
+        body {
+      flex-direction: column; /* Stack columns vertically on smaller screens */
+      align-items: stretch; /* Ensure full-width alignment for each column */
+    }
+    
+        .column {
+          max-width: 88%;
+        }
+      }
     </style>
   </head>
   <body>
     <h1>Hello.</h1>
-    <ul>
-      ${linksHtml}
-    </ul>
+    <div class="column">
+      <h2>Code</h2>
+      <ul>
+        ${appsHtml}
+      </ul>
+    </div>
+    <div class="column">
+      <h2>Writing</h2>
+      <ul>
+        ${markdownHtml}
+      </ul>
+    </div>
   </body>
 </html>

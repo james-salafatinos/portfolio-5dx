@@ -10,31 +10,57 @@ app.use(express.json()); // For parsing application/json
 // Home Route - Dynamic App List
 app.get("/", (req, res) => {
   const srcPath = path.join(__dirname, "src", "public");
+  const markdownPath = path.join(srcPath, "markdown");
   const homePath = path.join(__dirname, "src", "views", "home.html");
 
   fs.readdir(srcPath, { withFileTypes: true }, (err, entries) => {
+    if (err) {
+      console.error("Error reading public directory:", err);
+      res.status(500).send("Internal Server Error");
+      return;
+    }
+
+    // Gather app folders (exclude markdown folder)
+    const appsHtml = entries
+      .filter((entry) => entry.isDirectory() && entry.name !== "markdown")
+      .map(
+        (folder) =>
+          `<li><a href="/${folder.name}">${folder.name}</a></li>`
+      )
+      .join("");
+
+    // Gather Markdown pages
+    fs.readdir(markdownPath, { withFileTypes: true }, (err, files) => {
       if (err) {
-          console.error("Error reading public directory:", err);
-          res.status(500).send("Internal Server Error");
-          return;
+        console.error("Error reading markdown directory:", err);
+        res.status(500).send("Internal Server Error");
+        return;
       }
 
-      const folders = entries.filter(entry => entry.isDirectory());
-      const linksHtml = folders
-          .map(folder => `<li><a href="/${folder.name}">${folder.name}</a></li>`)
-          .join("");
+      const markdownLinks = files
+        .filter((file) => file.isFile() && file.name.endsWith(".md"))
+        .map((file) => {
+          const pageName = file.name.replace(".md", "");
+          return `<li><a href="/markdown/${pageName}">${pageName}</a></li>`;
+        })
+        .join("");
 
+      // Read the home template and inject the content
       fs.readFile(homePath, "utf8", (err, html) => {
-          if (err) {
-              console.error("Error reading home.html:", err);
-              res.status(500).send("Error loading home page");
-              return;
-          }
+        if (err) {
+          console.error("Error reading home.html:", err);
+          res.status(500).send("Error loading home page");
+          return;
+        }
 
-          // Replace the placeholder with generated links
-          const updatedHtml = html.replace("${linksHtml}", linksHtml);
-          res.send(updatedHtml);
+        // Replace placeholders with separate columns
+        const updatedHtml = html
+          .replace("${appsHtml}", appsHtml)
+          .replace("${markdownHtml}", markdownLinks);
+
+        res.send(updatedHtml);
       });
+    });
   });
 });
 
@@ -70,6 +96,33 @@ app.get("/:appName", function (request, response) {
       );
 
     response.send(updatedHtml);
+  });
+});
+
+// Route to serve plain Markdown pages
+app.get("/markdown/:pageName", (req, res) => {
+  const pageName = req.params.pageName;
+  const markdownPath = path.join(__dirname, "src", "public", "markdown", `${pageName}.md`);
+  const markdownTemplatePath = path.join(__dirname, "src", "views", "markdown_template.html");
+
+  // Check if Markdown file exists
+  if (!fs.existsSync(markdownPath)) {
+    return res.status(404).send("Page not found");
+  }
+
+  fs.readFile(markdownTemplatePath, "utf8", (err, template) => {
+    if (err) {
+      console.error("Error reading markdown_template.html:", err);
+      res.status(500).send("Internal Server Error");
+      return;
+    }
+
+    // Inject Markdown file into the template
+    const updatedHtml = template.replace(
+      "<!-- MARKDOWN_CONTENT_PLACEHOLDER -->",
+      `<zero-md src="/public/markdown/${pageName}.md" no-shadow></zero-md>`
+    );
+    res.send(updatedHtml);
   });
 });
 
