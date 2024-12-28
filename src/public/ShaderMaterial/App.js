@@ -26,8 +26,10 @@ import { OrbitControls } from "/modules/OrbitControls.js";
 import { AxesHelper } from "/components/AxesHelper.webgpu.js";
 import { GridHelper } from "/components/GridHelper.webgpu.js";
 
+import {Game} from "./Game.js";
+
 // Global Variables
-let camera, scene, renderer, controls;
+let camera, scene, renderer, controls, game
 
 create();
 
@@ -38,10 +40,16 @@ function create() {
   _initControls();
   _initHelpers();
   _initGUI();
+
+    
+  game = new Game(scene)
+  game.create()
+  
 }
 
 async function update() {
   controls.update();
+  game.update()
   renderer.render(scene, camera);
 }
 
@@ -52,7 +60,7 @@ function _initCamera() {
     0.1,
     100
   );
-  camera.position.set(3, 5, 8);
+  camera.position.set(30, 60, 80);
 }
 
 function _initScene() {
@@ -110,7 +118,7 @@ function _initControls() {
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.minDistance = 0.1;
-  controls.maxDistance = 50;
+  controls.maxDistance = 60;
 }
 
 function _initHelpers() {
