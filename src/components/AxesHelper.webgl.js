@@ -1,4 +1,4 @@
-import * as THREE from "/modules/webgpu/three.webgpu.js";
+import * as THREE from "/modules/three.module.js";
 
 class AxesHelper {
 

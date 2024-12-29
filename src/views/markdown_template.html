@@ -3,6 +3,20 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Markdown Page</title>
+    <script>
+      // Configure MathJax settings
+  
+      MathJax = {
+        tex: {
+          inlineMath: [
+            ["$", "$"],
+            ["\\(", "\\)"],
+          ],
+        },
+      };
+      console.log(MathJax)
+      addEventListener("zero-md-rendered", () => MathJax.typeset());
+    </script>
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"
@@ -12,73 +26,72 @@
       src="https://cdn.jsdelivr.net/gh/zerodevx/zero-md@2/dist/zero-md.min.js"
     ></script>
     <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        line-height: 1.6;
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 1rem;
+        background: #eeeeee;
+        color: #222831;
+        position: relative;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        color: #00adb5;
+      }
+
+      #home-btn {
+        position: fixed;
+        bottom: 10px;
+        right: 10px;
+        z-index: 1;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        background: #00adb5;
+        color: #eeeeee;
+        font-size: 18px;
+        text-align: center;
+        line-height: 50px;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      #home-btn:before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(45deg, #393e46, #222831);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        border-radius: inherit;
+      }
+
+      #home-btn:hover:before {
+        opacity: 0.5;
+      }
+
+      @media (max-width: 768px) {
         body {
-          font-family: Arial, sans-serif;
-          margin: 0;
-          padding: 0;
-          line-height: 1.6;
-          max-width: 800px;
-          margin: 2rem auto;
           padding: 1rem;
-          background: #EEEEEE;
-          color: #222831;
-          position: relative;
         }
-      
-        h1,
-        h2,
-        h3,
-        h4,
-        h5,
-        h6 {
-          color: #00ADB5;
-        }
-      
+
         #home-btn {
-          position: fixed;
-          bottom: 10px;
-          right: 10px;
-          z-index: 1;
-          border-radius: 50%;
-          width: 50px;
-          height: 50px;
-          background: #00ADB5;
-          color: #EEEEEE;
-          font-size: 18px;
-          text-align: center;
-          line-height: 50px;
-          cursor: pointer;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          width: 40px;
+          height: 40px;
+          font-size: 16px;
+          line-height: 40px;
         }
-      
-        #home-btn:before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(45deg, #393E46, #222831);
-          opacity: 0;
-          transition: opacity 0.2s ease;
-          border-radius: inherit;
-        }
-      
-        #home-btn:hover:before {
-          opacity: 0.5;
-        }
-      
-        @media (max-width: 768px) {
-          body {
-            padding: 1rem;
-          }
-      
-          #home-btn {
-            width: 40px;
-            height: 40px;
-            font-size: 16px;
-            line-height: 40px;
-          }
-        }
-      </style>
-      
+      }
+    </style>
   </head>
   <body>
     <!-- Markdown content -->

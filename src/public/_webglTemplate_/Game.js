@@ -1,4 +1,4 @@
-import * as THREE from "/modules/three.webgpu.js";
+import * as THREE from "/modules/webgpu/three.webgpu.js";
 import { GLTFLoader } from "/modules/GLTFLoader.js";
 
 class Game {

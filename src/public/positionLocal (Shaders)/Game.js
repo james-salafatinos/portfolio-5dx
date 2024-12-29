@@ -30,8 +30,8 @@ class Game {
   _createTestCustomMaterial1() {
     const material = new THREE.MeshBasicNodeMaterial();
 
+    material.positionNode = positionLocal.add(vec3(sin(time),0,0));
 
-    material.positionNode = positionLocal.add(vec3(-2,0,0));
 
     material.colorNode = vec4(positionWorld, 1);
 
@@ -42,7 +42,8 @@ class Game {
   _createTestCustomMaterial2() {
     const material = new THREE.MeshBasicNodeMaterial();
 
-    material.positionNode = positionLocal.add(vec3(sin(time),0,0));
+    material.positionNode = positionLocal.add(vec3(-2,0,0));
+
 
     material.colorNode = vec4(positionLocal, 1);
 
@@ -73,7 +74,7 @@ class Game {
     const delta = 0.01; // Adjust rotation speed as needed
     this.objects.forEach((mesh) => {
       mesh.rotation.x += .01
-    
+      console.log(mesh)
     });
   }
 }

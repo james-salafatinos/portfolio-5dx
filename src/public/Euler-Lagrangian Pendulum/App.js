@@ -1,4 +1,4 @@
-import * as THREE from "/modules/three.webgpu.js";
+import * as THREE from "/modules/webgpu/three.webgpu.js";
 import {
   float,
   If,
@@ -19,7 +19,7 @@ import {
   hash,
   vec3,
   vec4,
-} from "/modules/three.tsl.js";
+} from "/modules/webgpu/three.tsl.js";
 
 import { GUI } from "/modules/lil-gui.module.min.js";
 import { OrbitControls } from "/modules/OrbitControls.js";
