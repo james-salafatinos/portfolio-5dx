@@ -1,35 +1,14 @@
-import * as THREE from "/modules/webgpu/three.webgpu.js";
-import {
-  float,
-  If,
-  PI,
-  color,
-  cos,
-  instanceIndex,
-  Loop,
-  sqrt,
-  mix,
-  mod,
-  sin,
-  instancedArray,
-  Fn,
-  uint,
-  uniform,
-  uniformArray,
-  hash,
-  vec3,
-  vec4,
-} from "/modules/webgpu/three.tsl.js";
+import * as THREE from "/modules/three.module.js";
 
 import { GUI } from "/modules/lil-gui.module.min.js";
 import { OrbitControls } from "/modules/OrbitControls.js";
-import { AxesHelper } from "/components/AxesHelper.webgpu.js";
-import { GridHelper } from "/components/GridHelper.webgpu.js";
+import { AxesHelper } from "/components/AxesHelper.webgl.js";
+import { GridHelper } from "/components/GridHelper.webgl.js";
 
-import {Game} from "./Game.js";
+import { Game } from "./Game.js";
 
 // Global Variables
-let camera, scene, renderer, controls, game
+let camera, scene, renderer, controls, game;
 
 create();
 
@@ -41,15 +20,13 @@ function create() {
   _initHelpers();
   _initGUI();
 
-    
-  game = new Game(scene)
-  game.create()
-  
+  game = new Game(scene);
+  console.log(game);
 }
 
-async function update() {
+function update() {
   controls.update();
-  game.update()
+  game.update();
   renderer.render(scene, camera);
 }
 
@@ -60,7 +37,7 @@ function _initCamera() {
     0.1,
     100
   );
-  camera.position.set(30, 60, 80);
+  camera.position.set(3, 5, 8);
 }
 
 function _initScene() {
@@ -84,7 +61,7 @@ function _initRenderer() {
   }
 
   // Initialize the renderer
-  renderer = new THREE.WebGPURenderer({ antialias: true });
+  renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(threeJsContainer.clientWidth, threeJsContainer.clientHeight);
   renderer.setAnimationLoop(update);
@@ -95,7 +72,8 @@ function _initRenderer() {
 
   // Set the camera aspect ratio and projection matrix
   if (camera) {
-    camera.aspect = threeJsContainer.clientWidth / threeJsContainer.clientHeight;
+    camera.aspect =
+      threeJsContainer.clientWidth / threeJsContainer.clientHeight;
     camera.updateProjectionMatrix();
   }
 
@@ -118,7 +96,7 @@ function _initControls() {
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.minDistance = 0.1;
-  controls.maxDistance = 60;
+  controls.maxDistance = 50;
 }
 
 function _initHelpers() {
@@ -143,4 +121,35 @@ function _initGUI() {
 
   // Initialize GUI and attach it to the container
   const gui = new GUI({ container: guiContainer });
+
+  // Create sliders
+  const gameSettings = {
+    repulsionStrength: 0.5,
+    attractionStrength: 0.01,
+    wallRepulsionStrength: 0.01,
+  };
+
+  // Probability Threshold Slider
+  gui
+    .add(gameSettings, "repulsionStrength", -1, 1, 0.01)
+    .name("Repulsion")
+    .onChange((value) => {
+      game.setRepulsionStrength(value);
+    });
+
+  // Probability Threshold Slider
+  gui
+    .add(gameSettings, "attractionStrength", 0, 1, 0.01)
+    .name("Attraction")
+    .onChange((value) => {
+      game.setAttractionStrength(value);
+    });
+
+  // Probability Threshold Slider
+  gui
+    .add(gameSettings, "wallRepulsionStrength", 0, 1, 0.01)
+    .name("Wall Repulsion")
+    .onChange((value) => {
+      game.setWallRepulsionStrength(value);
+    });
 }

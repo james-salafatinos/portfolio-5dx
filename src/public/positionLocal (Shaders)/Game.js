@@ -1,4 +1,4 @@
-import * as THREE from "/modules/three.webgpu.js";
+import * as THREE from "/modules/webgpu/three.webgpu.js";
 import { GLTFLoader } from "/modules/GLTFLoader.js";
 import {
   texture,
@@ -17,7 +17,7 @@ import {
   positionViewDirection,
   positionWorldDirection,
   positionGeometry,
-} from "/modules/three.tsl.js";
+} from "/modules/webgpu/three.tsl.js";
 
 class Game {
   constructor(scene) {
@@ -74,7 +74,7 @@ class Game {
     const delta = 0.01; // Adjust rotation speed as needed
     this.objects.forEach((mesh) => {
       mesh.rotation.x += .01
-      console.log(mesh)
+      // console.log(mesh)
     });
   }
 }

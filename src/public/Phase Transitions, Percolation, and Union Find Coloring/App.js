@@ -122,4 +122,29 @@ function _initGUI() {
 
   // Initialize GUI and attach it to the container
   const gui = new GUI({ container: guiContainer });
+
+  // Create game settings
+  const gameSettings = {
+    probabilityThreshold: 0.5,
+    oscillationTimestep: 0.01,
+    autoOscillate: false, // Default: Oscillation off
+  };
+
+  // Probability Threshold Slider
+  gui.add(gameSettings, "probabilityThreshold", 0, 1, 0.01)
+    .name("Threshold")
+    .onChange((value) => {
+      if (!gameSettings.autoOscillate) {
+        game.setProbabilityThreshold(value);
+      }
+    });
+
+  // Auto Oscillate Checkbox
+  gui.add(gameSettings, "autoOscillate")
+    .name("Auto Oscillate")
+    .onChange((value) => {
+      game.setAutoOscillate(value);
+    });
 }
+
+
