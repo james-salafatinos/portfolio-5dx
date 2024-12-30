@@ -1,18 +1,21 @@
 {
-    "name": "portfolio-5dx",
-    "version": "1.0.0",
-    "description": "My portfolio of fun art, physics, and business musings",
-    "main": "server.js",
-    "scripts": {
-        "start": "node server.js",
-        "test": "echo \"Error: no test specified\" && exit 1",
-        "push": "node scripts/npm-push.js",
-        "git-setup": "node scripts/npm-git-setup.js"
-    },
-    "author": "james salafatinos",
-    "license": "ISC",
-    "dependencies": {
-        "dotenv": "^16.4.5",
-        "express": "^4.21.0"
-    }
+  "name": "portfolio-5dx",
+  "version": "1.0.0",
+  "description": "My portfolio of fun art, physics, and business musings",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "push": "node scripts/npm-push.js",
+    "git-setup": "node scripts/npm-git-setup.js"
+  },
+  "author": "james salafatinos",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0"
+  },
+  "engines": {
+    "node": "18.x"
+  }
 }

@@ -2,150 +2,224 @@
 <html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <head>
-    <title>Home</title>
+    <title>${appName}</title>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 0;
-        background: linear-gradient(90deg, #eeeeee, #eeeeee);
-        display: flex;
-        justify-content: center;
-        align-items: flex-start;
-        flex-wrap: wrap;
+      :root {
+        --gradient-primary: linear-gradient(45deg, #eeeeee 0%, #eeeeee 100%);
+        --gradient-secondary: linear-gradient(45deg, #00adb5 0%, #222831 100%);
       }
 
-      h1 {
-        text-align: center;
-        color: #00adb5;
+      body,
+      html {
         margin: 0;
-        padding: 1rem;
+        padding: 0;
+        height: 100%;
         width: 100%;
       }
-
-      .column {
-        max-width: 500px;
-        margin: 1rem;
-        background: #eeeeee;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        padding: 1rem;
-        flex-grow: 1;
-      }
-
-      h2 {
-        text-align: center;
-        margin: 0 0 1rem 0;
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
         color: #00adb5;
       }
 
-      .section-header {
-        cursor: pointer;
+      #container {
         display: flex;
-        align-items: center;
-        padding: 0.5rem;
-        margin-bottom: 0.5rem;
-        color: #00adb5;
-        font-size: 1.2rem;
+        height: 100vh;
+        transition: flex 0.2s ease;
       }
 
-      .section-header span {
-        margin-right: 0.5rem;
-        font-size: 1.2rem;
-        transform: rotate(0deg);
-        transition: transform 0.3s ease;
+      #markdown,
+      #threejs {
+        overflow: auto;
+        transition: flex 0.2s ease;
         color: #00adb5;
       }
 
-      .section-header.collapsed span {
-        transform: rotate(-90deg);
-      }
-
-      ul {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-      }
-
-      ul.collapsible {
-        display: block;
-      }
-
-      ul.collapsible.hidden {
-        display: none;
-      }
-
-      li {
-        margin: 0.5rem 0;
-        text-align: center;
-      }
-
-      a {
-        text-decoration: none;
+      #markdown {
+        flex: 3;
+        padding: 60px 20px 0px 20px;
+        background: var(--gradient-primary);
         color: #00adb5;
-        font-size: 1.2em;
-        padding: 0.5rem 1rem;
-        border: 2px solid #00adb5;
-        border-radius: 8px;
-        display: inline-block;
-        transition: background 0.3s, color 0.3s;
       }
 
-      a:hover {
+      #threejs {
+        flex: 4;
+        position: relative;
+      }
+
+      #menu-btn {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
         background: #00adb5;
         color: #eeeeee;
       }
 
+      #menu-btn:before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: var(--gradient-secondary);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        border-radius: inherit;
+      }
+
+      #menu-btn:hover:before {
+        opacity: 0.5;
+      }
+
+      .hide-sidebar #markdown {
+        flex: 0;
+        padding: 0;
+        overflow: hidden;
+        transition: flex 0.2s ease, padding 0.3s ease;
+      }
+
+      .hide-sidebar #threejs {
+        flex: 6;
+        transition: flex 0.2s ease;
+      }
+
+      #home-btn {
+        position: fixed;
+        bottom: 10px;
+        right: 10px;
+        z-index: 1;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        background: #00adb5;
+        color: #eeeeee;
+        font-size: 18px;
+        text-align: center;
+
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      #home-btn:before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(45deg, #393e46, #222831);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        border-radius: inherit;
+      }
+
+      #home-btn:hover:before {
+        opacity: 0.5;
+      }
+
       @media (max-width: 768px) {
-        body {
+        #container {
           flex-direction: column;
-          align-items: stretch;
         }
 
-        .column {
-          max-width: 100%;
+        #markdown {
+          flex: 1;
+          padding: 60px 10px;
+        }
+
+        #threejs {
+          flex: 4;
+        }
+
+        #menu-btn {
+          width: 30px;
+          height: 30px;
+          top: 10px;
+          left: 10px;
+        }
+
+        #home-btn {
+          width: 30px;
+          height: 30px;
+          bottom: 10px;
+          right: 10px;
+          font-size: 12px;
+          text-align: center;
         }
       }
     </style>
     <script>
-      function toggleVisibility(id, header) {
-        const section = document.getElementById(id);
-        section.classList.toggle('hidden');
-        header.classList.toggle('collapsed');
-      }
+      MathJax = {
+        tex: {
+          inlineMath: [
+            ["$", "$"],
+            ["\\(", "\\)"],
+          ],
+          displayMath: [
+            ["$$", "$$"],
+            ["\\[", "\\]"],
+          ],
+          processEscapes: false,
+        },
+      };
+      addEventListener("zero-md-rendered", () => MathJax.typeset());
     </script>
+    <script
+      id="MathJax-script"
+      async
+      src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg-full.min.js"
+    ></script>
+    <script
+      type="module"
+      src="https://cdn.jsdelivr.net/gh/zerodevx/zero-md@2/dist/zero-md.min.js"
+    ></script>
   </head>
   <body>
-    <h1>Hello.</h1>
-    <div class="column">
-      <h2>Code</h2>
-      <div class="section-header" onclick="toggleVisibility('code-simulation', this)">
-        <span>&#9654;</span> Code
+    <button id="home-btn">🏠</button>
+    <button id="menu-btn">☰</button>
+    <div id="container">
+      <div id="markdown">
+        <!-- NOTES_SRC_PLACEHOLDER -->
       </div>
-      <ul id="code-simulation" class="collapsible">
-        ${simulationLinks}
-      </ul>
-      <div class="section-header" onclick="toggleVisibility('code-templates', this)">
-        <span>&#9654;</span> Code
-      </div>
-      <ul id="code-templates" class="collapsible">
-        ${templateLinks}
-      </ul>
+      <div id="threejs"></div>
+      <!-- APP_NAME_PLACEHOLDER -->
     </div>
-    <div class="column">
-      <h2>Writing</h2>
-      <div class="section-header" onclick="toggleVisibility('writing-philosophy', this)">
-        <span>&#9654;</span> Writing
-      </div>
-      <ul id="writing-philosophy" class="collapsible">
-        ${philosophyLinks}
-      </ul>
-      <div class="section-header" onclick="toggleVisibility('writing-physics', this)">
-        <span>&#9654;</span> Writing
-      </div>
-      <ul id="writing-physics" class="collapsible">
-        ${physicsLinks}
-      </ul>
-    </div>
+
+    <script>
+      const menuBtn = document.getElementById("menu-btn");
+      const homeBtn = document.getElementById("home-btn");
+      const container = document.getElementById("container");
+      const markdown = document.getElementById("markdown");
+
+      menuBtn.addEventListener("click", () => {
+        container.classList.toggle("hide-sidebar");
+
+        // Listen for the end of the transition
+        markdown.addEventListener(
+          "transitionend",
+          () => {
+            requestAnimationFrame(() => {
+              // Force a resize event for Three.js canvas
+              window.dispatchEvent(new Event("resize"));
+
+              // Ensure the #threejs container fills the available space
+              const threeJsContainer = document.getElementById("threejs");
+              const canvas = threeJsContainer.querySelector("canvas");
+              if (canvas) {
+                canvas.style.width = "100%";
+                canvas.style.height = "100%";
+              }
+            });
+          },
+          { once: true } // Ensures the event listener is only triggered once
+        );
+      });
+
+      homeBtn.addEventListener("click", () => {
+        window.location.href = "/";
+      });
+    </script>
   </body>
 </html>

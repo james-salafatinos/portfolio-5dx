@@ -26,27 +26,21 @@ class Game {
     const offsets = [];
     const colors = [];
 
-    // Radial initialization of particles
     for (let i = 0; i < this.numParticles; i++) {
-      const theta = Math.random() * Math.PI * 2; // Random angle in XY-plane
-      const phi = Math.acos(2 * Math.random() - 1); // Random angle from pole to pole
-      const radius = Math.random() * this.initParticleSpread; // Random radius within the spread
-
-      const x = radius * Math.sin(phi) * Math.cos(theta);
-      const y = radius * Math.sin(phi) * Math.sin(theta);
-      const z = radius * Math.cos(phi);
+      const x = (Math.random() * 2 - 1) * this.initParticleSpread;
+      const y = (Math.random() * 2 - 1) * this.initParticleSpread;
+      const z = (Math.random() * 2 - 1) * this.initParticleSpread;
 
       offsets.push(x, y, z);
       colors.push(Math.random(), Math.random(), Math.random());
 
       this.particlePositions.push(new THREE.Vector3(x, y, z));
 
-      const vx = (Math.random() - 0.5) * 0; // Initial velocity x-component
-      const vy = (Math.random() - 0.5) * 0; // Initial velocity y-component
-      const vz = (Math.random() - 0.5) * 0; // Initial velocity z-component
+      const vx = (Math.random() - 0.5) * 0; //0.05;  // Random velocity x-component
+      const vy = (Math.random() - 0.5) * 0; //0.001;  // Random velocity y-component
+      const vz = (Math.random() - 0.5) * 0; //0.001;  // Random velocity z-component
 
       this.particleVelocities.push(new THREE.Vector3(vx, vy, vz)); // Store initial velocity
-      this.particlePreviousPositions.push(new THREE.Vector3(x, y, z));
     }
 
     // Add instanced attributes to geometry
@@ -61,20 +55,20 @@ class Game {
 
     const material = new THREE.ShaderMaterial({
       vertexShader: `
-            attribute vec3 offset;
-            attribute vec3 color;
-            varying vec3 vColor;
-            void main() {
-                vColor = color;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4( position + offset, 1.0 );
-            }
-        `,
+        attribute vec3 offset;
+        attribute vec3 color;
+        varying vec3 vColor;
+        void main() {
+          vColor = color;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4( position + offset, 1.0 );
+        }
+      `,
       fragmentShader: `
-            varying vec3 vColor;
-            void main() {
-                gl_FragColor = vec4( vColor, 1.0 );
-            }
-        `,
+        varying vec3 vColor;
+        void main() {
+          gl_FragColor = vec4( vColor, 1.0 );
+        }
+      `,
     });
 
     this.particles = new THREE.Mesh(geometry, material);
