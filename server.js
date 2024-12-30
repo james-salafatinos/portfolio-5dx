@@ -64,6 +64,76 @@ app.get("/", (req, res) => {
   });
 });
 
+app.get("/", (req, res) => {
+  const srcPath = path.join(__dirname, "src", "public");
+  const markdownPath = path.join(srcPath, "markdown");
+  const homePath = path.join(__dirname, "src", "views", "home.html");
+
+  fs.readdir(srcPath, { withFileTypes: true }, (err, entries) => {
+    if (err) {
+      console.error("Error reading public directory:", err);
+      res.status(500).send("Internal Server Error");
+      return;
+    }
+
+    const simulationLinks = entries
+      .filter((entry) => entry.isDirectory() && entry.name.includes("simulation"))
+      .map(
+        (folder) =>
+          `<li><a href="/${folder.name}">${folder.name}</a></li>`
+      )
+      .join("");
+
+    const templateLinks = entries
+      .filter((entry) => entry.isDirectory() && entry.name.includes("template"))
+      .map(
+        (folder) =>
+          `<li><a href="/${folder.name}">${folder.name}</a></li>`
+      )
+      .join("");
+
+    fs.readdir(markdownPath, { withFileTypes: true }, (err, files) => {
+      if (err) {
+        console.error("Error reading markdown directory:", err);
+        res.status(500).send("Internal Server Error");
+        return;
+      }
+
+      const philosophyLinks = files
+        .filter((file) => file.isFile() && file.name.includes("philosophy"))
+        .map((file) => {
+          const pageName = file.name.replace(".md", "");
+          return `<li><a href="/markdown/${pageName}">${pageName}</a></li>`;
+        })
+        .join("");
+
+      const physicsLinks = files
+        .filter((file) => file.isFile() && file.name.includes("physics"))
+        .map((file) => {
+          const pageName = file.name.replace(".md", "");
+          return `<li><a href="/markdown/${pageName}">${pageName}</a></li>`;
+        })
+        .join("");
+
+      fs.readFile(homePath, "utf8", (err, html) => {
+        if (err) {
+          console.error("Error reading home.html:", err);
+          res.status(500).send("Error loading home page");
+          return;
+        }
+
+        const updatedHtml = html
+          .replace("${simulationLinks}", simulationLinks)
+          .replace("${templateLinks}", templateLinks)
+          .replace("${philosophyLinks}", philosophyLinks)
+          .replace("${physicsLinks}", physicsLinks);
+
+        res.send(updatedHtml);
+      });
+    });
+  });
+});
+
 app.get("/:appName", function (request, response) {
   const appName = request.params.appName;
 
