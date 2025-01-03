@@ -23,10 +23,7 @@ app.get("/", (req, res) => {
     // Gather app folders (exclude markdown folder)
     const appsHtml = entries
       .filter((entry) => entry.isDirectory() && entry.name !== "markdown")
-      .map(
-        (folder) =>
-          `<li><a href="/${folder.name}">${folder.name}</a></li>`
-      )
+      .map((folder) => `<li><a href="/${folder.name}">${folder.name}</a></li>`)
       .join("");
 
     // Gather Markdown pages
@@ -74,36 +71,74 @@ app.get("/:appName", function (request, response) {
   app.use("/resources", express.static("./src/resources"));
   app.use("/views", express.static("./src/views"));
 
-  const indexPath = path.join(__dirname, "src", "views", "index.html");
+  if (appName == "StrategyMapper") {
+    const indexPath = path.join(
+      __dirname,
+      "src",
+      "views",
+      "strategyMapper.html"
+    );
 
-  fs.readFile(indexPath, "utf8", (err, data) => {
-    if (err) {
-      console.error("Error reading index.html:", err);
-      response.status(500).send("Internal Server Error");
-      return;
-    }
+    fs.readFile(indexPath, "utf8", (err, data) => {
+      if (err) {
+        console.error("Error reading index.html:", err);
+        response.status(500).send("Internal Server Error");
+        return;
+      }
 
-    // Replace placeholders in index.html
-    const updatedHtml = data
-      .replace("${appName}", appName) // Replace appName placeholder
-      .replace(
-        "<!-- APP_NAME_PLACEHOLDER -->",
-        `<script type="module" src="/public/${appName}/App.js"></script>`
-      )
-      .replace(
-        "<!-- NOTES_SRC_PLACEHOLDER -->",
-        `<zero-md src="/public/${appName}/notes.md" no-shadow></zero-md>`
-      );
+      // Replace placeholders in index.html
+      const updatedHtml = data
+        .replace("${appName}", appName) // Replace appName placeholder
+        .replace(
+          "<!-- APP_NAME_PLACEHOLDER -->",
+          `<script type="module" src="/public/${appName}/App.js"></script>`
+        );
 
-    response.send(updatedHtml);
-  });
+      response.send(updatedHtml);
+    });
+  } else {
+    const indexPath = path.join(__dirname, "src", "views", "index.html");
+
+    fs.readFile(indexPath, "utf8", (err, data) => {
+      if (err) {
+        console.error("Error reading index.html:", err);
+        response.status(500).send("Internal Server Error");
+        return;
+      }
+
+      // Replace placeholders in index.html
+      const updatedHtml = data
+        .replace("${appName}", appName) // Replace appName placeholder
+        .replace(
+          "<!-- APP_NAME_PLACEHOLDER -->",
+          `<script type="module" src="/public/${appName}/App.js"></script>`
+        )
+        .replace(
+          "<!-- NOTES_SRC_PLACEHOLDER -->",
+          `<zero-md src="/public/${appName}/notes.md" no-shadow></zero-md>`
+        );
+
+      response.send(updatedHtml);
+    });
+  }
 });
 
 // Route to serve plain Markdown pages
 app.get("/markdown/:pageName", (req, res) => {
   const pageName = req.params.pageName;
-  const markdownPath = path.join(__dirname, "src", "public", "markdown", `${pageName}.md`);
-  const markdownTemplatePath = path.join(__dirname, "src", "views", "markdown_template.html");
+  const markdownPath = path.join(
+    __dirname,
+    "src",
+    "public",
+    "markdown",
+    `${pageName}.md`
+  );
+  const markdownTemplatePath = path.join(
+    __dirname,
+    "src",
+    "views",
+    "markdown_template.html"
+  );
 
   // Check if Markdown file exists
   if (!fs.existsSync(markdownPath)) {
@@ -125,6 +160,7 @@ app.get("/markdown/:pageName", (req, res) => {
     res.send(updatedHtml);
   });
 });
+
 
 var server = app.listen(process.env.PORT || port, listen);
 

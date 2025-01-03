@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Existing head elements -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StrategyMapper</title>
+    <style>
+      #home-btn {
+        position: fixed;
+        bottom: 10px;
+        right: 10px;
+        z-index: 1;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        background: #00adb5;
+        color: #eeeeee;
+        font-size: 18px;
+        text-align: center;
+
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      #home-btn:before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(45deg, #393e46, #222831);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        border-radius: inherit;
+      }
+
+      #home-btn:hover:before {
+        opacity: 0.5;
+      }
+    </style>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="./public/StrategyMapper/litegraph.css"
+    />
+  </head>
+
+  <body style="margin: 0; overflow: hidden">
+    <button id="home-btn">🏠</button>
+    <!-- Toolbar with input field, buttons, and dropdown -->
+    <div
+      id="toolbar"
+      style="
+        position: absolute;
+        top: 0;
+        left: 0;
+        background: #f0f0f0;
+        padding: 5px;
+        z-index: 1000;
+      "
+    >
+      <input type="text" id="graphNameInput" placeholder="Graph Name" />
+      <button id="saveButton">Save</button>
+      <select id="savedGraphsDropdown">
+        <option value="">Select Graph to Load</option>
+      </select>
+      <button id="loadButton">Load</button>
+      <button id="downloadButton">Download</button>
+      <input type="file" id="uploadInput" style="display: none" />
+      <button id="uploadButton">Upload</button>
+    </div>
+    <!-- Add this below the toolbar -->
+    <div
+      id="tableContainer"
+      style="
+        position: absolute;
+        top: 40px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow: auto;
+        display: none;
+        background: #fff;
+        z-index: 1000;
+      "
+    >
+      <button id="toggleGraphView" style="margin: 10px">
+        Switch to Graph View
+      </button>
+      <table id="dataTable" style="width: 100%; border-collapse: collapse">
+        <thead>
+          <tr>
+            <!-- Headers will be dynamically added -->
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Rows will be dynamically added -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Adjusted canvas position -->
+    <canvas
+      id="mycanvas"
+      style="border: 0px solid; position: absolute; top: 40px; left: 0"
+    ></canvas>
+    <script src="./public/StrategyMapper/litegraph.core.js"></script>
+    <script type="module" src="./public/StrategyMapper/App.js"></script>
+    <script>
+      const homeBtn = document.getElementById("home-btn");
+
+      homeBtn.addEventListener("click", () => {
+        window.location.href = "/";
+      });
+    </script>
+  </body>
+</html>

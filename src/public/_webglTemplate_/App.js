@@ -22,7 +22,6 @@ function create() {
 
     
   game = new Game(scene)
-  game.create()
   
 }
 

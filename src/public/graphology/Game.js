@@ -34,7 +34,7 @@ class Game {
   }
 
   create() {
-    this.graphologyGraph = this._initializeTestGraph();
+    this.graphologyGraph = this._initializeTestHistoricalGraph();
     this.graph = new ThreeGraph(this.scene, this.graphologyGraph, this.camera);
     this.graph.create();
   }
@@ -49,7 +49,7 @@ class Game {
       allowSelfLoops: false,
       type: "mixed",
     }); //directed, or mixed
-    graph.addNode("Connie");
+    graph.addNode("Connie", {type:'Woman', role: 'Coordinator'});
     graph.addNode("Sebastian");
     graph.addNode("James");
     graph.addNode("Samantha");
@@ -83,6 +83,77 @@ class Game {
     );
     return graph;
   }
+
+  _initializeTestHistoricalGraph() {
+    const graph = new graphology.Graph({
+        multi: true,
+        allowSelfLoops: false,
+        type: "mixed",
+    });
+
+    // Add nodes to the graph
+    const nodesToAdd = [
+        ["Pony Express", { type: "event", date: "1860-04-03" }],
+        ["Abraham Lincoln", { type: "person", role: "president" }],
+        ["Hannibal Hamlin", { type: "person", role: "vice president" }],
+        ["Crittenden Compromise", { type: "legislation" }],
+        ["South Carolina", { type: "state" }],
+        ["Confederate States of America", { type: "entity" }],
+        ["Jefferson Davis", { type: "person", role: "Confederate president" }],
+        ["American Civil War", { type: "event" }],
+        ["Emancipation Proclamation", { type: "document" }],
+        ["13th Amendment", { type: "legislation" }],
+        ["Andrew Johnson", { type: "person", role: "president" }],
+        ["Reconstruction Acts", { type: "legislation" }],
+        ["Ulysses S. Grant", { type: "person", role: "president" }],
+        ["Transcontinental Railroad", { type: "infrastructure", date: "1869" }],
+        ["15th Amendment", { type: "legislation" }],
+        ["Yellowstone National Park", { type: "entity", date: "1872" }],
+        ["Battle of Little Bighorn", { type: "event", date: "1876" }],
+        ["Rutherford B. Hayes", { type: "person", role: "president" }],
+        ["Great Railroad Strike of 1877", { type: "event" }]
+    ];
+
+    nodesToAdd.forEach(([node, attributes]) => {
+        graph.addNode(node, attributes);
+    });
+
+    // Add edges to the graph
+    const edgesToAdd = [
+        ["Abraham Lincoln", "Hannibal Hamlin", { type: "election", date: "1860-11-06" }],
+        ["South Carolina", "Confederate States of America", { type: "secession", date: "1860-12-20" }],
+        ["Jefferson Davis", "Confederate States of America", { type: "leadership", role: "president" }],
+        ["American Civil War", "Emancipation Proclamation", { type: "cause_effect" }],
+        ["13th Amendment", "Andrew Johnson", { type: "legislation_signed" }],
+        ["Reconstruction Acts", "Ulysses S. Grant", { type: "enforcement" }],
+        ["Transcontinental Railroad", "Ulysses S. Grant", { type: "infrastructure_initiative" }],
+        ["15th Amendment", "Ulysses S. Grant", { type: "legislation_signed" }],
+        ["Yellowstone National Park", "Ulysses S. Grant", { type: "creation" }],
+        ["Battle of Little Bighorn", "Rutherford B. Hayes", { type: "historical_context" }],
+        ["Great Railroad Strike of 1877", "Rutherford B. Hayes", { type: "response" }]
+    ];
+
+    edgesToAdd.forEach(([source, target, attributes]) => {
+        graph.addEdge(source, target, attributes);
+    });
+
+    // Example usage of the callback to log edges
+    graph.forEachEdge(
+        (
+            edge,
+            attributes,
+            source,
+            target,
+            sourceAttributes,
+            targetAttributes
+        ) => {
+            console.log(`Edge from ${source} to ${target} with attributes:`, attributes);
+        }
+    );
+
+    return graph;
+}
+
 }
 
 class ThreeGraph {
@@ -112,7 +183,7 @@ class ThreeGraph {
     const sphereGeometry = new THREE.SphereGeometry(0.2, 8);
 
     graphologyLibrary.layout.random.assign(graph);
-    graphologyLibrary.layoutForceAtlas2.assign(graph, { iterations: 50 });
+    graphologyLibrary.layoutForceAtlas2.assign(graph, { iterations: 1 });
 
     graph.forEachNode((node, attributes) => {
       console.log(node, attributes);

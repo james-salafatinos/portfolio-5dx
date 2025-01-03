@@ -1,5 +1,5 @@
 
-# The Art and Science of Force-Directed Graph Spatialization  
+# Naive Force-Directed Spatialization with Edges
 
 Have you ever marveled at those mesmerizing network diagrams where nodes seem to dance into position, revealing the underlying structure of relationships? At the heart of these visualizations often lies a family of algorithms known as **force-directed spatialization**. Today, we'll dive into the mechanics, mathematics, and code behind these algorithms, focusing on implementing a naive force-directed layout using **Fruchterman-Reingold** principles. Along the way, we'll explore key enhancements inspired by tools like **ForceAtlas2** and discuss their modern applications in platforms like **Gephi**.
 
