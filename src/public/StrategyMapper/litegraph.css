@@ -191,6 +191,7 @@
     min-width: 60px;
     min-height: 1.5em;
     padding-left: 10px;
+    color: white;
 }
 
 .litegraph.litesearchbox .helper {
@@ -581,6 +582,7 @@
     min-width: 60px;
     min-height: 1.5em;
     padding-left: 10px;
+       color: white;
 }
 
 .graphdialog input,

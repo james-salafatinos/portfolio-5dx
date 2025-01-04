@@ -36,6 +36,7 @@
         overflow: auto;
         transition: flex 0.2s ease;
         color: #00adb5;
+
       }
 
       #markdown {
@@ -220,6 +221,9 @@
       homeBtn.addEventListener("click", () => {
         window.location.href = "/";
       });
+
+      //Start hidden
+      container.classList.toggle("hide-sidebar");
     </script>
   </body>
 </html>

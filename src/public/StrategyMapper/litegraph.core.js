@@ -8140,7 +8140,7 @@ LGraphNode.prototype.executeAction = function(action)
         ctx.fill();
         ctx.globalAlpha = 1;
 
-        ctx.fillStyle = "#888";
+        ctx.fillStyle = "#fff8";
         ctx.font = "14px Arial";
         ctx.textAlign = "left";
         ctx.fillText("Graph Inputs", 20, 34);
