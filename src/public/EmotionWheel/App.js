@@ -38,8 +38,8 @@ function create() {
   _initScene();
   _initRenderer();
   // _initControls();
-  _initHelpers();
-  _initGUI();
+  // _initHelpers();
+  // _initGUI();
 
     
   game = new Game(scene, camera)

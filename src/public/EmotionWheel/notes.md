@@ -1,19 +1,15 @@
-# Welcome to Template
+Todo:
 
-## Getting Started:
-1. Clone the repository
-2. Run `npm install`
-3. Run `npm start`
-4. Visit `http://localhost:3000/`
+Submission System
+[80%] Able to click several emotions, and add as tags e.g. [[+Joy], [+Apprehension]], with metadata optional on location, time, etc.
+- Able to click microphone button to record a voice memo (optional)
+- Able to transcribe that voice memo using whisper API (optional, could be local storage)
+- Able to submit and store on cloud database (only text, not audio)
 
-## Developing:
-1. Duplicate `AppTemplate` folder within the `/src/public` folder
-2. Rename the duplicate folder
-3. Develop App or Game
-
-## Key Notes:
-1. The only npm dependencies are `express` and `dotenv`
-2. `/src/modules` is for Three.js dependencies and other *external modules*
-3. `/src/components` is for *user created modules*
-4. `/src/resources` is for static files like pictures, videos, icons
-5. `/src/views` is for html
+Dashboard System
+- Able to query and pull down data from cloud database
+- Able to visualize data as a list of entries / table
+- Able to export data as a csv or json 
+- Able to visualie data as a heatmap on the wheel (or similar)
+- Able to visualize data as a linechart over time (or similar)
+- 

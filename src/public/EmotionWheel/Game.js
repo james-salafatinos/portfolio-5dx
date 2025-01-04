@@ -21,17 +21,154 @@ class Game {
     this.isDragging = false;
     this.previousPointerPosition = { x: 0, y: 0 };
 
+    this.trayContainer = document.getElementById("html-tray"); // Get the tray container
+
+    this.mediaRecorder = null; // For MediaRecorder
+    this.audioChunks = []; // For storing recorded audio chunks
+    this.apiKey = null; // To store the user-entered API key
+
     this.create();
     this.setupInteractivity();
     this.setupDragToRotate();
+    this.setupApiKeyInput(); // Setup API key input
+  }
+
+  setupApiKeyInput() {
+    // Create an input field and button in the tray for the API key
+    const container = document.createElement("div");
+    container.style.cssText =
+      "margin: 10px; display: flex; align-items: center;";
+
+    const input = document.createElement("input");
+    input.type = "password"; // Hide the input text like a password
+    input.placeholder = "Enter OpenAI API Key";
+    input.style.cssText = `
+    flex: 1;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-right: 5px;
+  `;
+
+    const saveButton = document.createElement("button");
+    saveButton.textContent = "Save API Key";
+    saveButton.style.cssText = `
+      padding: 5px 10px;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    `;
+
+    saveButton.addEventListener("click", () => {
+      this.apiKey = input.value;
+      alert("API Key saved!");
+      input.value = ""; // Clear the input field
+    });
+
+    container.appendChild(input);
+    container.appendChild(saveButton);
+
+    if (this.trayContainer) {
+      this.trayContainer.appendChild(container);
+    }
+  }
+
+  async setupMicrophoneHandler() {
+    const micButton = document.getElementById("mic-btn");
+
+    micButton.addEventListener("click", async () => {
+      if (!this.apiKey) {
+        // Prompt for API key if not already set
+        const userKey = prompt("Please enter your OpenAI API key:");
+        if (!userKey) {
+          alert("API key is required for transcription.");
+          return;
+        }
+        this.apiKey = userKey;
+        alert("API Key saved!");
+      }
+
+      if (!this.mediaRecorder) {
+        // Start recording
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+          this.mediaRecorder = new MediaRecorder(stream);
+          this.audioChunks = [];
+
+          this.mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              this.audioChunks.push(event.data);
+            }
+          };
+
+          this.mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(this.audioChunks, {
+              type: "audio/webm",
+            });
+            const audioFile = new File([audioBlob], "recording.webm");
+
+            // Transcribe the audio using Whisper API
+            const transcription = await this.transcribeAudio(audioFile);
+            console.log("Transcription:", transcription);
+          };
+
+          this.mediaRecorder.start();
+          console.log("Recording started...");
+        } catch (error) {
+          console.error("Error accessing microphone:", error);
+        }
+      } else if (this.mediaRecorder.state === "recording") {
+        // Stop recording
+        this.mediaRecorder.stop();
+        console.log("Recording stopped.");
+        this.mediaRecorder = null;
+      }
+    });
+  }
+
+  async transcribeAudio(audioFile) {
+    if (!this.apiKey) {
+      alert("API key is required! Please save your API key.");
+      return "No API key provided.";
+    }
+  
+    const formData = new FormData();
+    formData.append("file", audioFile);
+    formData.append("model", "whisper-1");
+  
+    try {
+      const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: formData,
+      });
+  
+      if (!response.ok) {
+        throw new Error(`API call failed: ${response.statusText}`);
+      }
+  
+      const data = await response.json();
+      console.log("Transcription:", data.text);
+      return data.text;
+    } catch (error) {
+      console.error("Error during transcription:", error);
+      return "Transcription failed.";
+    }
   }
 
   async create() {
     this.font = await this.loadFont();
+
     const baseRadius = Math.min(window.innerWidth, window.innerHeight) * 0.001;
     const ringWidth = 0.9;
 
-    // define your ring arrays...
+    // Define your ring arrays
     const ring1 = [
       { name: "ecstasy", color: "#FFD700" },
       { name: "admiration", color: "#ADFF2F" },
@@ -105,7 +242,7 @@ class Game {
         const startAngle = i * wedgeAngle + halfOffset;
         const emotion = ringData[i];
 
-        // wedge geometry
+        // Wedge geometry
         const geometry = new THREE.RingGeometry(
           innerR,
           outerR,
@@ -121,10 +258,10 @@ class Game {
         const wedgeMesh = new THREE.Mesh(geometry, material);
         wedgeMesh.rotation.x = Math.PI / 2;
         wedgeMesh.userData = { emotion: emotion.name, color: emotion.color };
-        this.wheelGroup.add(wedgeMesh); // <--- add to wheelGroup
+        this.wheelGroup.add(wedgeMesh);
         this.objects.push(wedgeMesh);
 
-        // text label
+        // Text label
         const labelAngle = startAngle + wedgeAngle / 2;
         const textMesh = this.createTextMesh(
           emotion.name,
@@ -132,21 +269,45 @@ class Game {
           innerR,
           outerR
         );
-        this.wheelGroup.add(textMesh); // <--- add to wheelGroup
+        this.wheelGroup.add(textMesh);
         this.objects.push(textMesh);
       }
     }
   }
 
-  
+  // Create a button and add it to the tray container
+  addTrayButton(emotionName) {
+    const button = document.createElement("button");
+    button.textContent = emotionName;
+    button.style.cssText = `
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      margin: 5px;
+      padding: 5px 10px;
+      cursor: pointer;
+      display: inline-block;
+    `;
 
+    button.onclick = () => {
+      console.log(`Tray button clicked: ${emotionName}`);
+      // Perform additional game-specific logic
+    };
+
+    if (this.trayContainer) {
+      this.trayContainer.appendChild(button);
+    }
+  }
+
+  // Create text meshes for each wedge
   createTextMesh(text, angle, innerRadius, outerRadius) {
     const radius = (innerRadius + outerRadius) / 2;
-    const screenScale = Math.min(window.innerWidth, window.innerHeight) * 0.0008;
+    const screenScale =
+      Math.min(window.innerWidth, window.innerHeight) * 0.0008;
     const textMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
 
     if (!this.font) {
-      return new THREE.Group(); // empty placeholder if font not loaded yet
+      return new THREE.Group(); // Empty placeholder if font not loaded yet
     }
 
     const textGeometry = new TextGeometry(text, {
@@ -170,6 +331,7 @@ class Game {
     return mesh;
   }
 
+  // Load font using the FontLoader
   loadFont() {
     const loader = new FontLoader();
     return new Promise((resolve, reject) => {
@@ -181,25 +343,41 @@ class Game {
       );
     });
   }
+
+  // Set up interactivity (pointer events, raycasting, etc.)
   setupInteractivity() {
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const element = document.querySelector("#threejs");
-  
-    // We’ll track how much the pointer has moved
+
+    // Submit Button Behavior
+    const submitButton = document.getElementById("submit-btn");
+    submitButton.addEventListener("click", () => {
+      console.log("Submit button clicked.");
+      // Add your submit logic here
+    });
+
+    // Microphone Button Behavior
+    const micButton = document.getElementById("mic-btn");
+    micButton.addEventListener("click", () => {
+      console.log("Microphone button clicked.");
+      // Add your microphone handling logic here
+    });
+
+    // We'll track pointer movement to distinguish between click vs. drag
     let pointerDownX = 0;
     let pointerDownY = 0;
     const draggingThreshold = 5; // pixel threshold
-  
+
     const onPointerDown = (event) => {
       pointerDownX = event.clientX;
       pointerDownY = event.clientY;
     };
-  
+
     const onPointerUp = (event) => {
       const moveX = Math.abs(event.clientX - pointerDownX);
       const moveY = Math.abs(event.clientY - pointerDownY);
-    
+
       if (moveX < draggingThreshold && moveY < draggingThreshold) {
         const rect = element.getBoundingClientRect();
         const x = event.clientX - rect.left;
@@ -208,28 +386,34 @@ class Game {
         pointer.y = -(y / rect.height) * 2 + 1;
         raycaster.setFromCamera(pointer, this.camera);
         const intersects = raycaster.intersectObjects(this.objects);
-    
+
         if (intersects.length > 0) {
           const intersectedObject = intersects[0].object;
           const emotion = intersectedObject.userData.emotion;
+
           if (emotion) {
             this.database[emotion] = (this.database[emotion] || 0) + 1;
             console.log(`Emotion tapped: ${emotion}`, this.database);
-    
-            // Animate darken and lighten transition
-            const originalColor = new THREE.Color(intersectedObject.userData.color);
-            const darkenedColor = new THREE.Color(0.2, 0.2, 0.2); // Darkened color
-            let progress = 0; // Animation progress (0 to 1)
-            const duration = 0.7; // Total duration in seconds
-            const clock = new THREE.Clock(); // Create a clock for timing
-    
+
+            // Add button to the tray
+            this.addTrayButton(emotion);
+
+            // Animate darken/lighten transition
+            const originalColor = new THREE.Color(
+              intersectedObject.userData.color
+            );
+            const darkenedColor = new THREE.Color(0.2, 0.2, 0.2);
+            let progress = 0;
+            const duration = 0.7;
+            const clock = new THREE.Clock();
+
             const animateColor = () => {
-              const delta = clock.getDelta(); // Time elapsed since last frame
-              progress += delta / duration; // Increment progress based on duration
-    
+              const delta = clock.getDelta();
+              progress += delta / duration;
+
               if (progress < 0.5) {
                 // First half of the animation: darkening
-                const t = progress / 0.5; // Normalize progress for the first half
+                const t = progress / 0.5;
                 intersectedObject.material.color.lerpColors(
                   originalColor,
                   darkenedColor,
@@ -237,7 +421,7 @@ class Game {
                 );
               } else if (progress < 1) {
                 // Second half of the animation: lightening
-                const t = (progress - 0.5) / 0.5; // Normalize progress for the second half
+                const t = (progress - 0.5) / 0.5;
                 intersectedObject.material.color.lerpColors(
                   darkenedColor,
                   originalColor,
@@ -245,36 +429,34 @@ class Game {
                 );
               } else {
                 // End of animation
-                intersectedObject.material.color.copy(originalColor); // Ensure final color is accurate
-                return; // Exit animation
+                intersectedObject.material.color.copy(originalColor);
+                return;
               }
-    
-              requestAnimationFrame(animateColor); // Continue animation loop
+
+              requestAnimationFrame(animateColor);
             };
-    
-            clock.start(); // Start the clock
-            requestAnimationFrame(animateColor); // Start the animation loop
+
+            clock.start();
+            requestAnimationFrame(animateColor);
           }
         }
       }
     };
-    
-    // We can still do hover on desktop if you want:
+
+    // Hover effect on desktop (mouse pointer)
     const onPointerMove = (event) => {
-      // Only apply hover on desktop (i.e., mouse pointers).
       if (event.pointerType !== "mouse") {
         return;
       }
-    
-      // Otherwise, proceed with the raycasting/hover highlight logic:
+
       const rect = element.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
-    
+
       pointer.x = (x / rect.width) * 2 - 1;
       pointer.y = -(y / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, this.camera);
-    
+
       const intersects = raycaster.intersectObjects(this.objects);
       if (intersects.length > 0) {
         const intersectedObject = intersects[0].object;
@@ -282,43 +464,42 @@ class Game {
           this.hoveredObject !== intersectedObject &&
           intersectedObject.material
         ) {
-          // Restore color of old hovered object
           if (this.hoveredObject && this.hoveredObject.material) {
             this.hoveredObject.material.color.set(
               this.hoveredObject.userData.color
             );
           }
-          // Highlight the new object
           intersectedObject.material.color.set(0x888888);
           this.hoveredObject = intersectedObject;
         }
       } else {
-        // Nothing hovered
         if (this.hoveredObject && this.hoveredObject.material) {
-          this.hoveredObject.material.color.set(this.hoveredObject.userData.color);
+          this.hoveredObject.material.color.set(
+            this.hoveredObject.userData.color
+          );
         }
         this.hoveredObject = null;
       }
     };
-    
-  
+
     element.addEventListener("pointerdown", onPointerDown, { passive: false });
     element.addEventListener("pointerup", onPointerUp, { passive: false });
     element.addEventListener("pointermove", onPointerMove, { passive: false });
+    this.setupMicrophoneHandler();
   }
-  
+
+  // Setup dragging to rotate the wheelGroup
   setupDragToRotate() {
     const element = document.querySelector("#threejs");
     element.style.touchAction = "none";
     element.style.userSelect = "none";
-  
+
     let isDragging = false;
     let lastAngle = 0;
-    // We'll store the last position so we can compute angles
-    let lastX = 0, lastY = 0;
-  
+    let lastX = 0;
+    let lastY = 0;
+
     const getPointerPos = (e) => {
-      // Get pointer coords relative to center of the element
       const rect = element.getBoundingClientRect();
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
@@ -326,62 +507,49 @@ class Game {
       const y = e.clientY - rect.top - centerY;
       return { x, y };
     };
-  
+
     const onPointerDown = (e) => {
       e.preventDefault();
       isDragging = true;
-  
       const { x, y } = getPointerPos(e);
-      // Convert to polar angle
       lastAngle = Math.atan2(y, x);
       lastX = x;
       lastY = y;
     };
-  
+
     const onPointerMove = (e) => {
       if (!isDragging) return;
       e.preventDefault();
-  
       const { x, y } = getPointerPos(e);
       const newAngle = Math.atan2(y, x);
-  
-      // Delta angle
+
       let deltaAngle = newAngle - lastAngle;
-  
-      // Keep it in a -PI..PI range so there’s no “jump” crossing boundaries
       if (deltaAngle > Math.PI) deltaAngle -= 2 * Math.PI;
       if (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI;
-  
-      // Apply to rotation. Negative sign so that moving clockwise rotates one way
+
       this.wheelGroup.rotation.y -= deltaAngle;
-  
       lastAngle = newAngle;
       lastX = x;
       lastY = y;
     };
-  
+
     const onPointerUp = (e) => {
       e.preventDefault();
       isDragging = false;
     };
-  
+
     element.addEventListener("pointerdown", onPointerDown, { passive: false });
     element.addEventListener("pointermove", onPointerMove, { passive: false });
     element.addEventListener("pointerup", onPointerUp, { passive: false });
     element.addEventListener("pointercancel", onPointerUp, { passive: false });
   }
-  
 
+  // Keep text upright in WORLD space
   update() {
-    // If you want text to remain upright in WORLD space, do:
     this.objects.forEach((obj) => {
-      // Check if it's a text mesh (crudely by geometry type)
       if (obj.isMesh && obj.geometry?.type === "TextGeometry") {
-        // get world position
         const worldPos = new THREE.Vector3();
         obj.getWorldPosition(worldPos);
-
-        // force it to look at y=100 in world coords
         obj.lookAt(worldPos.x, 100, worldPos.z);
       }
     });
