@@ -2,8 +2,8 @@ Todo:
 
 Submission System
 [80%] Able to click several emotions, and add as tags e.g. [[+Joy], [+Apprehension]], with metadata optional on location, time, etc.
-- Able to click microphone button to record a voice memo (optional)
-- Able to transcribe that voice memo using whisper API (optional, could be local storage)
+[80%] Able to click microphone button to record a voice memo (optional)
+[80%] Able to transcribe that voice memo using whisper API (optional, could be local storage)
 - Able to submit and store on cloud database (only text, not audio)
 
 Dashboard System

@@ -6,6 +6,15 @@ const path = require("path");
 const dotenv = require("dotenv").config();
 const fs = require("fs");
 
+// Import the Submission model
+const Submission = require("./models/datasetObject.model.js");
+const mongoose = require("mongoose");
+const dbURI = process.env.MONGO_URI;
+mongoose
+  .connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then((result) => console.log("Connected to db"))
+  .catch((err) => console.log("Error on connection with mongodb...", err));
+
 app.use(express.json()); // For parsing application/json
 // Home Route - Dynamic App List
 app.get("/", (req, res) => {
@@ -96,6 +105,32 @@ app.get("/:appName", function (request, response) {
 
       response.send(updatedHtml);
     });
+  }
+  if (appName == "EmotionWheel") {
+    const indexPath = path.join(
+      __dirname,
+      "src",
+      "views",
+      "emotionsWheel.html"
+    );
+
+    fs.readFile(indexPath, "utf8", (err, data) => {
+      if (err) {
+        console.error("Error reading index.html:", err);
+        response.status(500).send("Internal Server Error");
+        return;
+      }
+
+      // Replace placeholders in index.html
+      const updatedHtml = data
+        .replace("${appName}", appName) // Replace appName placeholder
+        .replace(
+          "<!-- APP_NAME_PLACEHOLDER -->",
+          `<script type="module" src="/public/${appName}/App.js"></script>`
+        );
+
+      response.send(updatedHtml);
+    });
   } else {
     const indexPath = path.join(__dirname, "src", "views", "index.html");
 
@@ -161,6 +196,28 @@ app.get("/markdown/:pageName", (req, res) => {
   });
 });
 
+app.post("/api/submit", async (req, res) => {
+  const { emotions, transcription, timestamp } = req.body;
+
+  if (!emotions || !Array.isArray(emotions)) {
+    return res.status(400).json({ error: "Invalid or missing emotions data" });
+  }
+
+
+
+  try {
+    const submission = new Submission({ emotions, transcription, timestamp });
+    const result = await submission.save();
+
+    console.log("Submission saved to database:", result);
+    res
+      .status(200)
+      .json({ message: "Submission successful", submission: result });
+  } catch (error) {
+    console.error("Error saving to database:", error);
+    res.status(500).json({ error: "Failed to save submission to database" });
+  }
+});
 
 var server = app.listen(process.env.PORT || port, listen);
 

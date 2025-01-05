@@ -25,62 +25,19 @@ class Game {
 
     this.mediaRecorder = null; // For MediaRecorder
     this.audioChunks = []; // For storing recorded audio chunks
-    this.apiKey = null; // To store the user-entered API key
+    this.apiKey = localStorage.getItem("openai_api_key") || null; // Directly set the stored API Key
 
     this.create();
     this.setupInteractivity();
     this.setupDragToRotate();
-    this.setupApiKeyInput(); // Setup API key input
-  }
-
-  setupApiKeyInput() {
-    // Create an input field and button in the tray for the API key
-    const container = document.createElement("div");
-    container.style.cssText =
-      "margin: 10px; display: flex; align-items: center;";
-
-    const input = document.createElement("input");
-    input.type = "password"; // Hide the input text like a password
-    input.placeholder = "Enter OpenAI API Key";
-    input.style.cssText = `
-    flex: 1;
-    padding: 5px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    margin-right: 5px;
-  `;
-
-    const saveButton = document.createElement("button");
-    saveButton.textContent = "Save API Key";
-    saveButton.style.cssText = `
-      padding: 5px 10px;
-      background-color: #28a745;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    `;
-
-    saveButton.addEventListener("click", () => {
-      this.apiKey = input.value;
-      alert("API Key saved!");
-      input.value = ""; // Clear the input field
-    });
-
-    container.appendChild(input);
-    container.appendChild(saveButton);
-
-    if (this.trayContainer) {
-      this.trayContainer.appendChild(container);
-    }
   }
 
   async setupMicrophoneHandler() {
     const micButton = document.getElementById("mic-btn");
+    const submitButton = document.getElementById("submit-btn");
 
     micButton.addEventListener("click", async () => {
       if (!this.apiKey) {
-        // Prompt for API key if not already set
         const userKey = prompt("Please enter your OpenAI API key:");
         if (!userKey) {
           alert("API key is required for transcription.");
@@ -91,7 +48,6 @@ class Game {
       }
 
       if (!this.mediaRecorder) {
-        // Start recording
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             audio: true,
@@ -106,14 +62,25 @@ class Game {
           };
 
           this.mediaRecorder.onstop = async () => {
+            // Show loading indicator
+            micButton.textContent = "⏳";
+            micButton.disabled = true;
+
             const audioBlob = new Blob(this.audioChunks, {
               type: "audio/webm",
             });
             const audioFile = new File([audioBlob], "recording.webm");
 
-            // Transcribe the audio using Whisper API
+            // Transcribe audio
             const transcription = await this.transcribeAudio(audioFile);
-            console.log("Transcription:", transcription);
+
+            // Hide loading indicator
+            micButton.textContent = "🎤";
+            micButton.disabled = false;
+
+            // Stage transcription for submission
+            this.transcription = transcription;
+            this.stageTranscription(transcription);
           };
 
           this.mediaRecorder.start();
@@ -122,7 +89,6 @@ class Game {
           console.error("Error accessing microphone:", error);
         }
       } else if (this.mediaRecorder.state === "recording") {
-        // Stop recording
         this.mediaRecorder.stop();
         console.log("Recording stopped.");
         this.mediaRecorder = null;
@@ -130,29 +96,81 @@ class Game {
     });
   }
 
+  stageTranscription(transcription) {
+    const transcriptionDisplay = document.createElement("div");
+    transcriptionDisplay.textContent = `Transcription: ${transcription}`;
+    transcriptionDisplay.style.cssText = `
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    margin: 5px;
+    background-color: #f9f9f9;
+`;
+
+    if (this.trayContainer) {
+      // Clear any previous transcription
+      const oldTranscription = this.trayContainer.querySelector(
+        ".staged-transcription"
+      );
+      if (oldTranscription) {
+        this.trayContainer.removeChild(oldTranscription);
+      }
+
+      transcriptionDisplay.classList.add("staged-transcription");
+      this.trayContainer.appendChild(transcriptionDisplay);
+    }
+  }
+
+  clearStagedData() {
+    // Clear emotions and transcription
+    this.database = {};
+    this.transcription = null;
+
+    // Remove transcription display
+    const oldTranscription = this.trayContainer.querySelector(
+      ".staged-transcription"
+    );
+    if (oldTranscription) {
+      oldTranscription.remove();
+    }
+
+    // Remove emotion buttons except specific ones
+    Array.from(this.trayContainer.children).forEach((child) => {
+      console.log(child)
+      if (child.id !== "mic-btn" && child.id !== "submit-btn" && child.id !== "api-key-container") {
+        child.remove();
+      }
+    });
+
+
+    console.log("Staged data cleared.");
+  }
   async transcribeAudio(audioFile) {
     if (!this.apiKey) {
       alert("API key is required! Please save your API key.");
       return "No API key provided.";
     }
-  
+
     const formData = new FormData();
     formData.append("file", audioFile);
     formData.append("model", "whisper-1");
-  
+
     try {
-      const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: formData,
-      });
-  
+      const response = await fetch(
+        "https://api.openai.com/v1/audio/transcriptions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: formData,
+        }
+      );
+
       if (!response.ok) {
         throw new Error(`API call failed: ${response.statusText}`);
       }
-  
+
       const data = await response.json();
       console.log("Transcription:", data.text);
       return data.text;
@@ -350,24 +368,32 @@ class Game {
     const pointer = new THREE.Vector2();
     const element = document.querySelector("#threejs");
 
-    // Submit Button Behavior
+    // Submit button logic to send emotions and transcription to the server
     const submitButton = document.getElementById("submit-btn");
-    submitButton.addEventListener("click", () => {
-      console.log("Submit button clicked.");
-      // Add your submit logic here
+    submitButton.addEventListener("click", async () => {
+      const stagedEmotions = this.getStagedEmotions();
+      const stagedTranscription = this.transcription || null;
+
+      if (stagedEmotions.length === 0) {
+        alert("Please select at least one emotion to submit.");
+        return;
+      }
+
+      // Submit the staged data
+      await this.handleDatabaseSubmission(stagedEmotions, stagedTranscription);
     });
 
     // Microphone Button Behavior
     const micButton = document.getElementById("mic-btn");
-    micButton.addEventListener("click", () => {
+    micButton.addEventListener("click", async () => {
       console.log("Microphone button clicked.");
-      // Add your microphone handling logic here
+      // Start the microphone logic, which will handle transcription and save it in this.transcription
     });
 
-    // We'll track pointer movement to distinguish between click vs. drag
+    // Pointer and hover logic for the emotion wheel
     let pointerDownX = 0;
     let pointerDownY = 0;
-    const draggingThreshold = 5; // pixel threshold
+    const draggingThreshold = 5; // Pixel threshold
 
     const onPointerDown = (event) => {
       pointerDownX = event.clientX;
@@ -385,6 +411,7 @@ class Game {
         pointer.x = (x / rect.width) * 2 - 1;
         pointer.y = -(y / rect.height) * 2 + 1;
         raycaster.setFromCamera(pointer, this.camera);
+
         const intersects = raycaster.intersectObjects(this.objects);
 
         if (intersects.length > 0) {
@@ -485,7 +512,7 @@ class Game {
     element.addEventListener("pointerdown", onPointerDown, { passive: false });
     element.addEventListener("pointerup", onPointerUp, { passive: false });
     element.addEventListener("pointermove", onPointerMove, { passive: false });
-    this.setupMicrophoneHandler();
+    this.setupMicrophoneHandler(); // Ensure microphone handler is initialized
   }
 
   // Setup dragging to rotate the wheelGroup
@@ -542,6 +569,47 @@ class Game {
     element.addEventListener("pointermove", onPointerMove, { passive: false });
     element.addEventListener("pointerup", onPointerUp, { passive: false });
     element.addEventListener("pointercancel", onPointerUp, { passive: false });
+  }
+
+  async handleDatabaseSubmission(emotions, transcription) {
+    if (!emotions || emotions.length === 0) {
+      console.error("Missing emotions data for submission");
+      alert("Please select at least one emotion.");
+      return;
+    }
+
+    const submissionData = {
+      emotions,
+      transcription: transcription || "", // Allow empty transcription
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      const response = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(submissionData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Submission failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log("Submission successful:", result);
+      alert("Data submitted successfully!");
+    } catch (error) {
+      console.error("Error during database submission:", error);
+      alert("Failed to submit data. Please try again.");
+    } finally {
+      // Always clear staged data after submission attempt
+      this.clearStagedData();
+    }
+  }
+
+  // Add a helper method to get the staged emotion
+  getStagedEmotions() {
+    return Object.keys(this.database) || null;
   }
 
   // Keep text upright in WORLD space
