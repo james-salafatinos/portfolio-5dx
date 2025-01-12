@@ -14,7 +14,10 @@ const dbURI = process.env.MONGO_URI;
 // Function to connect to MongoDB
 async function connectToDatabase() {
   try {
-    await mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true });
+    await mongoose.connect(dbURI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
     console.log("Connected to db");
   } catch (err) {
     console.error("Error on connection with MongoDB:", err.message);
@@ -141,6 +144,33 @@ app.get("/:appName", function (request, response) {
 
       response.send(updatedHtml);
     });
+  }
+
+  if (appName == "Transcribe") {
+    const indexPath = path.join(
+      __dirname,
+      "src",
+      "views",
+      "transcribeService.html"
+    );
+
+    fs.readFile(indexPath, "utf8", (err, data) => {
+      if (err) {
+        console.error("Error reading index.html:", err);
+        response.status(500).send("Internal Server Error");
+        return;
+      }
+
+      // Replace placeholders in index.html
+      const updatedHtml = data
+        .replace("${appName}", appName) // Replace appName placeholder
+        .replace(
+          "<!-- APP_NAME_PLACEHOLDER -->",
+          `<script type="module" src="/public/${appName}/App.js"></script>`
+        );
+
+      response.send(updatedHtml);
+    });
   } else {
     const indexPath = path.join(__dirname, "src", "views", "index.html");
 
@@ -212,8 +242,6 @@ app.post("/api/submit", async (req, res) => {
   if (!emotions || !Array.isArray(emotions)) {
     return res.status(400).json({ error: "Invalid or missing emotions data" });
   }
-
-
 
   try {
     const submission = new Submission({ emotions, transcription, timestamp });

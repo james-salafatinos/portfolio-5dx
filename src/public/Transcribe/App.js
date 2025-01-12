@@ -1,9 +1,30 @@
-import * as THREE from "/modules/three.module.js";
+import * as THREE from "/modules/webgpu/three.webgpu.js";
+import {
+  float,
+  If,
+  PI,
+  color,
+  cos,
+  instanceIndex,
+  Loop,
+  sqrt,
+  mix,
+  mod,
+  sin,
+  instancedArray,
+  Fn,
+  uint,
+  uniform,
+  uniformArray,
+  hash,
+  vec3,
+  vec4,
+} from "/modules/webgpu/three.tsl.js";
 
 import { GUI } from "/modules/lil-gui.module.min.js";
 import { OrbitControls } from "/modules/OrbitControls.js";
-import { AxesHelper } from "/components/AxesHelper.webgl.js";
-import { GridHelper } from "/components/GridHelper.webgl.js";
+import { AxesHelper } from "/components/AxesHelper.webgpu.js";
+import { GridHelper } from "/components/GridHelper.webgpu.js";
 
 import {Game} from "./Game.js";
 
@@ -13,12 +34,12 @@ let camera, scene, renderer, controls, game
 create();
 
 function create() {
-  _initCamera();
-  _initScene();
-  _initRenderer();
-  _initControls();
-  _initHelpers();
-  _initGUI();
+  // _initCamera();
+  // _initScene();
+  // _initRenderer();
+  // _initControls();
+  // _initHelpers();
+  // _initGUI();
 
     
   game = new Game(scene)
@@ -62,7 +83,7 @@ function _initRenderer() {
   }
 
   // Initialize the renderer
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer = new THREE.WebGPURenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(threeJsContainer.clientWidth, threeJsContainer.clientHeight);
   renderer.setAnimationLoop(update);
