@@ -10,10 +10,20 @@ const fs = require("fs");
 const Submission = require("./models/datasetObject.model.js");
 const mongoose = require("mongoose");
 const dbURI = process.env.MONGO_URI;
-mongoose
-  .connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then((result) => console.log("Connected to db"))
-  .catch((err) => console.log("Error on connection with mongodb...", err));
+
+// Function to connect to MongoDB
+async function connectToDatabase() {
+  try {
+    await mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true });
+    console.log("Connected to db");
+  } catch (err) {
+    console.error("Error on connection with MongoDB:", err.message);
+    console.error("Proceeding without database connection...");
+  }
+}
+
+// Call the database connection function
+connectToDatabase();
 
 app.use(express.json()); // For parsing application/json
 // Home Route - Dynamic App List
