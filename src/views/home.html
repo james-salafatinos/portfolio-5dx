@@ -4,78 +4,76 @@
   <head>
     <title>Home</title>
     <style>
-      
       body {
         font-family: Arial, sans-serif;
         margin: 0;
         padding: 0;
-        background: linear-gradient(90deg, #EEEEEE, #EEEEEE);
+        background: linear-gradient(90deg, #eeeeee, #eeeeee);
         display: flex;
         justify-content: center;
         align-items: flex-start;
         flex-wrap: wrap;
-      
       }
-    
+
       h1 {
         text-align: center;
-        color: #00ADB5;
-        margin: 0;
-        padding: 1rem;
+        color: #535C91;
+        padding-top: 20px;
+
         width: 100%;
       }
-    
+
       .column {
         max-width: 500px;
         margin: 1rem;
-        background: #EEEEEE;
+        background: #eeeeee;
         border-radius: 10px;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         padding: 1rem;
         flex-grow: 1;
       }
-    
+
       h2 {
         text-align: center;
         margin: 0 0 1rem 0;
-        color: #00ADB5;
+        color: #535C91;
       }
-    
+
       ul {
         list-style: none;
         padding: 0;
         margin: 0;
       }
-    
+
       li {
         margin: 0.5rem 0;
         text-align: center;
       }
-    
+
       a {
         text-decoration: none;
-        color: #00ADB5;
+        color: #535C91;
         font-size: 1.2em;
         padding: 0.5rem 1rem;
-        border: 2px solid #00ADB5;
+        width: 90%; /* Ensure consistent width on mobile */
         border-radius: 8px;
         display: inline-block;
         transition: background 0.3s, color 0.3s;
       }
-    
+
       a:hover {
-        background: #00adb5;
-        color: #EEEEEE;
+        filter: brightness(110%); /* Darken on hover */
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
       }
-    
+ 
+
       @media (max-width: 768px) {
         body {
-      flex-direction: column; /* Stack columns vertically on smaller screens */
-      align-items: stretch; /* Ensure full-width alignment for each column */
-    }
-    
+          flex-direction: column; /* Stack columns vertically on smaller screens */
+        }
+
         .column {
-          max-width: 100%;
+          max-width: 90%;
         }
       }
     </style>
@@ -84,16 +82,37 @@
     <h1>Hello.</h1>
     <div class="column">
       <h2>Code</h2>
-      <ul>
+      <ul id="code-list">
         ${appsHtml}
       </ul>
     </div>
     <div class="column">
       <h2>Writing</h2>
-      <ul>
+      <ul id="writing-list">
         ${markdownHtml}
       </ul>
     </div>
-    
   </body>
+
+  <script>
+    // Array of darker pastel colors
+    const pastelColors = ["#B5C0D0",
+"#CCD3CA",
+"#F5E8DD",
+"#EED3D9",];
+
+
+
+    // Apply pastel colors to links
+    function applyColors(listId) {
+      const links = document.querySelectorAll(`#${listId} a`);
+      links.forEach((link, index) => {
+        const color = pastelColors[index % pastelColors.length]; // Cycle through colors
+        link.style.backgroundColor = color;
+      });
+    }
+
+    applyColors("code-list");
+    applyColors("writing-list");
+  </script>
 </html>

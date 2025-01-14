@@ -117,9 +117,9 @@ app.get("/:appName", function (request, response) {
         );
 
       response.send(updatedHtml);
+      return;
     });
-  }
-  if (appName == "EmotionWheel") {
+  } else if (appName == "EmotionWheel") {
     const indexPath = path.join(
       __dirname,
       "src",
@@ -143,10 +143,9 @@ app.get("/:appName", function (request, response) {
         );
 
       response.send(updatedHtml);
+      return;
     });
-  }
-
-  if (appName == "Transcribe") {
+  } else if (appName == "Transcribe") {
     const indexPath = path.join(
       __dirname,
       "src",
@@ -170,6 +169,7 @@ app.get("/:appName", function (request, response) {
         );
 
       response.send(updatedHtml);
+      return;
     });
   } else {
     const indexPath = path.join(__dirname, "src", "views", "index.html");
@@ -194,6 +194,7 @@ app.get("/:appName", function (request, response) {
         );
 
       response.send(updatedHtml);
+      return;
     });
   }
 });
