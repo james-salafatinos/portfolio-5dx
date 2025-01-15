@@ -13,12 +13,14 @@ class Game {
     this.micBtn = document.getElementById("mic-btn");
     this.copyBtn = document.getElementById("copy-btn");
     this.transcriptContainer = document.getElementById("transcript-container");
+    this.fileUpload = document.getElementById("audio-upload");
+    this.fileUploadBtn = document.getElementById("upload-btn");
 
+
+    this.setupFileUploadButton();
     this.setupMicButton();
     this.setupCopyButton();
   }
-
-
 
   setupMicButton() {
     if (!this.micBtn) return;
@@ -57,7 +59,9 @@ class Game {
           // On stop, send to Whisper
           this.mediaRecorder.onstop = async () => {
             this.micBtn.textContent = "⏳"; // Show transcribing
-            const audioBlob = new Blob(this.audioChunks, { type: "audio/webm" });
+            const audioBlob = new Blob(this.audioChunks, {
+              type: "audio/webm",
+            });
             const audioFile = new File([audioBlob], "recording.webm");
             const result = await this.transcribeAudio(audioFile);
 
@@ -93,13 +97,16 @@ class Game {
       formData.append("file", audioFile);
       formData.append("model", "whisper-1");
 
-      const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: formData,
-      });
+      const response = await fetch(
+        "https://api.openai.com/v1/audio/transcriptions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: formData,
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Transcription failed: ${response.statusText}`);
@@ -114,7 +121,7 @@ class Game {
   }
   setupCopyButton() {
     if (!this.copyBtn) return;
-  
+
     this.copyBtn.addEventListener("click", () => {
       if (!this.transcript) {
         this.copyBtn.textContent = "No text to copy!";
@@ -125,7 +132,7 @@ class Game {
         }, 2000);
         return;
       }
-  
+
       navigator.clipboard
         .writeText(this.transcript)
         .then(() => {
@@ -145,6 +152,41 @@ class Game {
             this.copyBtn.style.backgroundColor = ""; // Reset to default
           }, 2000);
         });
+    });
+  }
+  // 2) Define the new setupFileUploadButton method:
+  setupFileUploadButton() {
+    if (!this.fileUploadBtn || !this.fileUpload) return;
+
+    this.fileUploadBtn.addEventListener("click", async () => {
+      // If no API key yet, prompt user for one
+      if (!this.apiKey) {
+        const userKey = prompt("Please enter your OpenAI API key:");
+        if (!userKey) {
+          alert("API key is required for transcription.");
+          return;
+        }
+        this.apiKey = userKey;
+        localStorage.setItem("openai_api_key", userKey);
+        alert("API Key saved!");
+      }
+
+      const file = this.fileUpload.files[0];
+      if (!file) {
+        alert("Please select an .m4a file first.");
+        return;
+      }
+
+      // Indicate that transcription is happening
+      this.fileUploadBtn.textContent = "⏳ Transcribing...";
+
+      // Use the same transcribeAudio function
+      const result = await this.transcribeAudio(file);
+      this.transcript = result;
+      this.transcriptContainer.textContent = result || "No result.";
+
+      // Reset button text
+      this.fileUploadBtn.textContent = "Transcribe File";
     });
   }
   update() {

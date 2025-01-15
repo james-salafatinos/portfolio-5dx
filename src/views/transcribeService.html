@@ -182,7 +182,6 @@
         display: flex;
         overflow-y: auto;
         overflow-x: auto;
-       
       }
 
       /* Copy button styling */
@@ -232,6 +231,17 @@
         <!-- Microphone button -->
         <button id="mic-btn" aria-label="Microphone">🎙️ Start Recording</button>
 
+        <div>
+          <!-- Added for file upload: M4A input + upload button -->
+          <input
+            type="file"
+            id="audio-upload"
+            accept=".m4a"
+            style="margin-top: 15px"
+          />
+          <button id="upload-btn" style="margin-top: 5px">Upload .m4a</button>
+        </div>
+
         <!-- Transcript display container -->
         <div id="transcript-container">Transcribed text will appear here.</div>
 
@@ -261,5 +271,6 @@
         apiKeyInput.value = "";
       });
     </script>
+    
   </body>
 </html>
