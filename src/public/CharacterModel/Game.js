@@ -7,6 +7,9 @@ import { RenderComponent } from './RenderComponent.js';
 import { TransformComponent } from './TransformComponent.js';
 import { CharacterComponent } from './CharacterComponent.js';
 import { MovementComponent } from './MovementComponent.js';
+import { InputComponent } from './InputComponent.js';
+import { InputSystem } from './InputSystem.js';
+import { CharacterSystem } from './CharacterSystem.js';
 
 class Game {
 
@@ -17,16 +20,25 @@ class Game {
       this.renderer = renderer;
       this.objects = [];
       
+      // Expose Game instance globally for component access
+      window.game = this;
+      
       // Initialize ECS World
       this.world = new World();
       
+      // Register systems
       this.renderSystem = new RenderSystem(scene);
+      this.inputSystem = new InputSystem(renderer);
+      this.characterSystem = new CharacterSystem(scene);
+      
       this.world.registerSystem(this.renderSystem);
+      this.world.registerSystem(this.inputSystem);
+      this.world.registerSystem(this.characterSystem);
       
       // Initialize systems
       this.world.init();
       
-      // Input state
+      // Input state (legacy - will be replaced by InputComponent)
       this.input = {
         isMoving: false,
         isRunning: false,
@@ -34,10 +46,10 @@ class Game {
         keys: {}
       };
       
-      // Animation mixer
+      // Animation mixer (legacy - now handled by CharacterSystem)
       this.mixer = null;
       
-      // Model and animations
+      // Model and animations (legacy - now handled by CharacterSystem)
       this.model = null;
       this.animations = {};
       
@@ -45,13 +57,13 @@ class Game {
       // Store the entity ID to ensure we always reference the same entity
       this.createCharacterEntity();
       
-      // Set up input listeners
+      // Set up input listeners (legacy - will be handled by InputSystem)
       this.setupInputListeners();
       
-      // Load character model and animations
-      this.loadCharacterModel();
+      // Load character model and animations via CharacterSystem
+      this.characterSystem.loadCharacterModel(this.characterEntity);
       
-      // Clock for animation and updates
+      // Clock for animation and updates (legacy - now handled by CharacterSystem)
       this.clock = new THREE.Clock();
   }
 
@@ -64,17 +76,20 @@ class Game {
     this.transformComponent = new TransformComponent();
     this.characterComponent = new CharacterComponent();
     this.movementComponent = new MovementComponent();
-    
+    this.inputComponent = new InputComponent();
     
     // Add components to entity
     this.characterEntity.addComponent(this.renderComponent);
     this.characterEntity.addComponent(this.transformComponent);
     this.characterEntity.addComponent(this.characterComponent);
     this.characterEntity.addComponent(this.movementComponent);
+    this.characterEntity.addComponent(this.inputComponent);
    
     // Store the entity ID for consistent reference
     this.characterEntityId = this.characterEntity.id;
-
+    
+    console.log('[Game] Created character entity with components:', this.characterEntity);
+    console.log('[Game] Added InputComponent to character entity');
   }
   
   create() {
@@ -108,54 +123,27 @@ class Game {
     // Get delta time
     const deltaTime = this.clock.getDelta() / 2;
     
-    // Update animation mixer
+    // LEGACY SECTION - Character updates now handled by CharacterSystem
+    // This section is kept for backward compatibility during transition
+    // and can be removed once CharacterSystem is fully integrated
     if (this.mixer) {
-      // Only log mixer updates occasionally to avoid console spam
-      const shouldLog = Math.random() < 0.01; // Log approximately 1% of updates
-      
+      // We don't need to update the mixer here anymore as it's handled by CharacterSystem
+      // But we keep this check for backward compatibility
+      const shouldLog = Math.random() < 0.01;
       if (shouldLog) {
-        console.log(`[Game] Updating mixer with deltaTime: ${deltaTime.toFixed(4)}`);
-        console.log(`[Game] Mixer stats:`, {
-          time: this.mixer.time,
-          timeScale: this.mixer.timeScale,
-          hasActiveTracks: this.mixer._actions && this.mixer._actions.length > 0
-        });
+        console.log('[Game] Mixer updates now handled by CharacterSystem');
       }
-      
-      this.mixer.update(deltaTime);
-      
-      if (shouldLog && this.characterComponent) {
-        console.log(`[Game] Current animation state: ${this.characterComponent.stateMachine.currentState}`);
-        console.log(`[Game] Current animation: ${this.characterComponent.currentAnimation}`);
-      }
-    } else {
-      console.warn('[Game] No mixer available for update');
     }
     
-    // Update character components with input using direct references
-    
-    // Update character component (animations)
-    if (this.characterComponent) {
-      this.characterComponent.update(deltaTime, this.input);
-    } else {
-      console.warn('[Game] CharacterComponent not available during update');
-    }
-    
-    // Update movement component (position/rotation)
-    if (this.movementComponent && this.model) {
-      this.movementComponent.update(deltaTime, this.input, this.model);
-    } else if (!this.movementComponent) {
-      console.warn('[Game] MovementComponent not available during update');
-    } else if (!this.model) {
-      console.warn('[Game] Model not available for MovementComponent update');
-    }
-    
- 
-    // Update world systems
+    // Update world systems (this will call update on all registered systems including CharacterSystem)
     this.world.update(deltaTime);
   }
   
   setupInputListeners() {
+    // LEGACY METHOD - Input handling is now managed by InputSystem
+    // This is kept for backward compatibility during transition
+    console.log('[Game] Legacy input setup - consider removing once InputSystem is fully integrated');
+    
     // Keyboard state
     this.keys = {};
     
@@ -163,11 +151,21 @@ class Game {
     window.addEventListener('keydown', (event) => {
       this.keys[event.key.toLowerCase()] = true;
       this.updateInputState();
+      
+      // Also update the InputComponent for consistency during transition
+      if (this.inputComponent) {
+        this.inputComponent.setKey(event.key.toLowerCase(), true);
+      }
     });
     
     window.addEventListener('keyup', (event) => {
       this.keys[event.key.toLowerCase()] = false;
       this.updateInputState();
+      
+      // Also update the InputComponent for consistency during transition
+      if (this.inputComponent) {
+        this.inputComponent.setKey(event.key.toLowerCase(), false);
+      }
     });
     
     // Mouse click for movement target
@@ -224,6 +222,8 @@ class Game {
     }
   }
   
+  // LEGACY METHOD - Now handled by CharacterSystem
+  // This method is kept for reference but is no longer used
   loadCharacterModel() {
     const fbxLoader = new FBXLoader();
     
@@ -287,6 +287,8 @@ class Game {
     );
   }
   
+  // LEGACY METHOD - Now handled by CharacterSystem
+  // This method is kept for reference but is no longer used
   loadAnimations() {
     const fbxLoader = new FBXLoader();
     const animations = [

@@ -11,7 +11,6 @@ export class CharacterComponent extends Component {
         // Character properties
         this.health = data.health || 100;
         this.maxHealth = data.maxHealth || 100;
-        this.speed = data.speed || 5;
     
         // Character state
         this.isGrounded = true;
@@ -156,14 +155,6 @@ export class CharacterComponent extends Component {
      */
     heal(amount) {
         this.setHealth(this.health + amount);
-    }
-
-    /**
-     * Set the character's movement speed
-     * @param {number} speed 
-     */
-    setSpeed(speed) {
-        this.speed = speed;
     }
 
     /**

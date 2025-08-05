@@ -5,13 +5,15 @@ import { Component } from './core/component.js';
 import * as THREE from '/modules/three.module.js';
 
 export class MovementComponent extends Component {
-    constructor() {
+    constructor(data = {}) {
         super();
         this.isMoving = false;
         this.targetPosition = new THREE.Vector3();
-        this.speed = 6.5; // Units per second
-        this.rotationSpeed = 20.0; // Radians per second
-        this.stoppingDistance = 0.1; // How close to target before stopping
+        this.speed = data.speed || 6.5; // Units per second
+        this.baseSpeed = this.speed; // Store the base speed for reference
+        this.runSpeedMultiplier = data.runSpeedMultiplier || 2.0; // Multiplier for running
+        this.rotationSpeed = data.rotationSpeed || 20.0; // Radians per second
+        this.stoppingDistance = data.stoppingDistance || 0.1; // How close to target before stopping
         this.hasTarget = false;
         this.direction = new THREE.Vector3();
     }
@@ -23,6 +25,32 @@ export class MovementComponent extends Component {
     setTargetPosition(position) {
         this.targetPosition.copy(position);
         this.hasTarget = true;
+    }
+    
+    /**
+     * Set the character's movement speed
+     * @param {number} speed - Base movement speed in units per second
+     */
+    setSpeed(speed) {
+        this.speed = speed;
+        this.baseSpeed = speed;
+    }
+    
+    /**
+     * Get the current movement speed (considering running state)
+     * @param {boolean} isRunning - Whether the character is running
+     * @returns {number} - The actual speed to use
+     */
+    getSpeed(isRunning = false) {
+        return isRunning ? this.speed * this.runSpeedMultiplier : this.speed;
+    }
+    
+    /**
+     * Set the run speed multiplier
+     * @param {number} multiplier - How much faster running is compared to walking
+     */
+    setRunSpeedMultiplier(multiplier) {
+        this.runSpeedMultiplier = multiplier;
     }
 
     /**
@@ -58,8 +86,8 @@ export class MovementComponent extends Component {
             if (this.direction.lengthSq() > 0) {
                 this.direction.normalize();
                 
-                // Apply movement speed
-                const actualSpeed = input.isRunning ? this.speed * 2 : this.speed;
+                // Apply movement speed using our getSpeed method
+                const actualSpeed = this.getSpeed(input.isRunning);
                 const movement = this.direction.clone().multiplyScalar(actualSpeed * deltaTime);
                 
                 // Update position
