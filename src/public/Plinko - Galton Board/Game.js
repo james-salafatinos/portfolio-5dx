@@ -82,10 +82,14 @@ class Game {
     this.scene = scene;
 
     // Sim params (GUI can write these)
-    this.dropRate    = 8;       // particles per second
-    this.gravity     = 4.0;
-    this.damping     = 0.55;
+    this.maxHoldRate  = 30;     // particles/sec at full 3s hold
+    this.gravity      = 4.0;
+    this.damping      = 0.55;
     this.maxParticles = 5000;
+
+    // Hold-to-drop state
+    this._isHolding   = false;
+    this._holdStart   = 0;     // performance.now() when hold began
 
     // Internal
     this._pegRows    = 12;
@@ -310,7 +314,21 @@ class Game {
     this.scene.add(this._normalCurve);
   }
 
-  // ── spawn ────────────────────────────────────────────────────────────────
+  // ── hold-to-drop controls ─────────────────────────────────────────────────
+  startHold() {
+    if (this._isHolding) return;
+    this._isHolding = true;
+    this._holdStart = performance.now();
+    // Immediately drop one ball on the initial tap
+    this._spawn();
+  }
+
+  stopHold() {
+    this._isHolding = false;
+    this._spawnAccum = 0;
+  }
+
+  // ── spawn ─────────────────────────────────────────────────────────────────
   _spawn() {
     // Find a free slot: scan for any non-frozen slot
     // We keep a cursor and wrap; most slots recycle quickly
@@ -493,11 +511,18 @@ class Game {
     const dt = Math.min(now - this._lastTime, 0.033);  // cap at 33ms
     this._lastTime = now;
 
-    // Spawn
-    this._spawnAccum += this.dropRate * dt;
-    while (this._spawnAccum >= 1) {
-      this._spawn();
-      this._spawnAccum -= 1;
+    // Spawn — only while button is held, rate accelerates over 3s
+    if (this._isHolding) {
+      const holdSec = Math.min((performance.now() - this._holdStart) / 1000, 3.0);
+      // Ease-in: starts at ~2/s, reaches maxHoldRate at 3s
+      // t goes 0→1 over holdSec 0→3, rate = mix(2, maxHoldRate, t^2)
+      const t = holdSec / 3.0;
+      const currentRate = 2 + (this.maxHoldRate - 2) * t * t;
+      this._spawnAccum += currentRate * dt;
+      while (this._spawnAccum >= 1) {
+        this._spawn();
+        this._spawnAccum -= 1;
+      }
     }
 
     // Physics — sub-step for stability
