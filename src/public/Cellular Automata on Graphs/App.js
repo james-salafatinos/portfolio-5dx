@@ -8,10 +8,7 @@ import { GridHelper } from "/components/GridHelper.webgl.js";
 import { Game } from "./Game.js";
 
 // Global Variables
-let camera, scene, renderer, controls, game;
-
-// Orthographic half-height (world units). Grid is 10x10 (±5), graph fits ±4.
-const FRUSTUM = 5.2;
+let camera, scene, renderer, controls, game, hud;
 
 create();
 
@@ -25,28 +22,21 @@ function create() {
   game = new Game(scene);
 
   _initGUI();
+  _initHUD();
 }
 
 function update() {
   controls.update();
   game.update();
+  _updateHUD();
   renderer.render(scene, camera);
 }
 
 function _initCamera() {
-  // Top-down orthographic view looking straight down the -Y axis.
-  // Content lives in the XZ plane (y = 0), matching the GridHelper orientation.
+  // Perspective view of the 3D graph; OrbitControls let the user fly around it.
   const aspect = window.innerWidth / window.innerHeight;
-  camera = new THREE.OrthographicCamera(
-    -aspect * FRUSTUM,
-    aspect * FRUSTUM,
-    FRUSTUM,
-    -FRUSTUM,
-    0.1,
-    100
-  );
-  camera.position.set(0, 10, 0);
-  camera.up.set(0, 0, -1); // keep +X to the right when looking down
+  camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+  camera.position.set(0, 0, 18);
   camera.lookAt(0, 0, 0);
 }
 
@@ -54,9 +44,14 @@ function _initScene() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color("#050a12");
 
-  // Soft ambient so the unlit basic materials read cleanly
-  const ambientLight = new THREE.AmbientLight("#ffffff", 0.8);
+  // Lighting for the shaded spheres: soft ambient + a single point light so the
+  // MeshPhong nodes pick up directional shading and the emissive glow reads.
+  const ambientLight = new THREE.AmbientLight(0x222222);
   scene.add(ambientLight);
+
+  const pointLight = new THREE.PointLight(0xffffff, 1.5);
+  pointLight.position.set(10, 10, 10);
+  scene.add(pointLight);
 }
 
 function _initRenderer() {
@@ -81,22 +76,21 @@ function _initRenderer() {
 function _resizeCamera(container) {
   const w = container.clientWidth;
   const h = container.clientHeight;
-  const aspect = w / h;
   renderer.setSize(w, h);
 
-  camera.left = -aspect * FRUSTUM;
-  camera.right = aspect * FRUSTUM;
-  camera.top = FRUSTUM;
-  camera.bottom = -FRUSTUM;
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 
 function _initControls() {
+  // Full orbit: rotate, pan, and zoom around the graph.
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.enableRotate = false; // lock to top-down — pan & zoom only
-  controls.minZoom = 0.3;
-  controls.maxZoom = 6;
+  controls.enableRotate = true;
+  controls.enablePan = true;
+  controls.enableZoom = true;
+  controls.minDistance = 3;
+  controls.maxDistance = 80;
   controls.target.set(0, 0, 0);
 }
 
@@ -122,13 +116,13 @@ function _initGUI() {
   const gui = new GUI({ container: guiContainer });
 
   const params = {
-    graphType: "Random",
-    nodeCount: 80,
+    graphType: "Small World",
+    nodeCount: 60,
     edgeProbability: 0.08,
-    rule: "Conway-like B3/S23",
+    rule: "Majority",
     stepMode: "Auto",
-    stepSpeed: 4,
-    seedPercent: 0.3,
+    stepSpeed: 3,
+    seedPercent: 0.35,
     restart: () => game && game.restart(),
     step: () => game && game.step(),
   };
@@ -176,4 +170,34 @@ function _initGUI() {
 
   gui.add(params, "restart").name("Restart");
   gui.add(params, "step").name("Step");
+}
+
+function _initHUD() {
+  const threeJsContainer = document.getElementById("threejs");
+  if (!threeJsContainer) return;
+
+  hud = document.createElement("div");
+  hud.style.position = "absolute";
+  hud.style.bottom = "12px";
+  hud.style.left = "12px";
+  hud.style.zIndex = "10";
+  hud.style.padding = "10px 14px";
+  hud.style.borderRadius = "6px";
+  hud.style.font = "13px/1.5 monospace";
+  hud.style.color = "#00ffcc";
+  hud.style.background = "rgba(5, 10, 18, 0.7)";
+  hud.style.border = "1px solid rgba(0, 255, 204, 0.25)";
+  hud.style.pointerEvents = "none";
+  hud.style.whiteSpace = "pre";
+  threeJsContainer.appendChild(hud);
+}
+
+function _updateHUD() {
+  if (!hud || !game) return;
+  const s = game.getStats();
+  hud.textContent =
+    `Generation: ${s.generation}\n` +
+    `Alive:      ${s.alive} / ${s.total}\n` +
+    `Rule:       ${s.rule}\n` +
+    `Graph:      ${s.graphType}`;
 }

@@ -52,17 +52,17 @@ The implemented rules:
 | Control | Description |
 |---------|-------------|
 | **Graph Type** | Choose the network topology: Random, Small World, Scale Free, Grid, or Ring. |
-| **Node Count** | Number of nodes, 20–300 (default 80). Capped at 300 for performance. |
+| **Node Count** | Number of nodes, 20–300 (default 60). Capped at 300 for performance. |
 | **Edge Probability** | Connection probability *p* for the Random (Erdős–Rényi) graph, 0–1 (default 0.08). |
-| **Rule** | The update rule: Conway-like B3/S23, Majority, Parity, or Custom. |
+| **Rule** | The update rule: Conway-like B3/S23, Majority (default), Parity, or Custom. |
 | **Step Mode** | **Auto** advances continuously; **Manual** advances only on the Step button. |
-| **Step Speed** | Steps per second in Auto mode, 1–30 (default 4). |
-| **Seed %** | Fraction of nodes that start alive, 0–1 (default 0.3). |
+| **Step Speed** | Steps per second in Auto mode, 1–30 (default 3). |
+| **Seed %** | Fraction of nodes that start alive, 0–1 (default 0.35). |
 | **Restart** | Rebuild the graph, re-layout, and re-seed the initial state. |
 | **Step** | Advance the automaton by exactly one synchronous step. |
 
-**Navigation:** the camera is locked to a top-down 2D view — **drag to pan** and **scroll to zoom**; rotation is disabled.
+**Navigation:** the graph is rendered in full 3D — **drag to orbit**, **right-drag to pan**, and **scroll to zoom** freely around the structure.
 
 ---
 
-*Alive nodes glow neon cyan; dead nodes are dark. Edges are static (the topology never changes mid-run) — only the node colours update each step.*
+*Alive nodes are glowing neon-cyan spheres; dead nodes are dark. The default graph is a Small World with the Majority rule, which grows spreading blobs of consensus. The topology never changes mid-run, but node and edge colours update every step, and a node briefly pulses larger whenever its state flips.*

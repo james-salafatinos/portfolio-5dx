@@ -9,15 +9,33 @@ import * as THREE from "/modules/three.module.js";
 // fully synchronous update. Different rules (Conway-like, Majority, Parity,
 // Custom) produce wildly different emergent behaviour depending on the
 // topology (random, small-world, scale-free, grid, ring).
+//
+// The graph is laid out and rendered in full 3D: nodes are shaded spheres
+// (glowing when alive), edges are coloured line segments, and the camera
+// orbits freely around the structure.
 // ---------------------------------------------------------------------------
 
 const MAX_NODES = 300;          // hard performance cap
-const NODE_RADIUS = 0.12;       // base circle radius (world units)
-const WORLD_EXTENT = 4.0;       // graph is scaled to fit roughly ±4 world units
+const NODE_RADIUS = 0.18;       // base sphere radius (world units)
+const WORLD_EXTENT = 5.0;       // graph is scaled to fit roughly ±5 world units
 
 const COLOR_ALIVE = new THREE.Color("#00ffcc"); // neon cyan
+const COLOR_ALIVE_EMISSIVE = new THREE.Color("#00ffcc");
 const COLOR_DEAD = new THREE.Color("#112233");  // dark
-const EDGE_COLOR = 0x1a3a6a;
+const COLOR_DEAD_EMISSIVE = new THREE.Color("#000000");
+
+// Edge colours. We bake the desired "opacity" into the colour brightness and
+// render with additive blending, so alive-alive edges read brighter than the
+// dim dead edges over the dark background.
+const COLOR_EDGE_ALIVE = new THREE.Color("#00ffcc");
+const COLOR_EDGE_DEAD = new THREE.Color("#1a3a6a");
+const EDGE_ALIVE_OPACITY = 0.4;
+const EDGE_DEAD_OPACITY = 0.2;
+
+// Pulse animation: a node that just changed state pops to this scale and
+// relaxes back to 1.0 over PULSE_TIME seconds.
+const PULSE_SCALE = 1.4;
+const PULSE_TIME = 0.3;
 
 // Layout (force-directed) parameters
 const FR_ITERATIONS = 50;
@@ -27,32 +45,36 @@ class Game {
     this.scene = scene;
 
     // ── Parameters (mirrored from the GUI) ──
-    this.graphType = "Random";
-    this.nodeCount = 80;
+    this.graphType = "Small World";
+    this.nodeCount = 60;
     this.edgeProbability = 0.08;
-    this.rule = "Conway-like B3/S23";
+    this.rule = "Majority";
     this.stepMode = "Auto";
-    this.stepSpeed = 4;          // steps / second
-    this.seedPercent = 0.3;
+    this.stepSpeed = 3;          // steps / second
+    this.seedPercent = 0.35;
 
     // ── Simulation timing ──
     this._lastTime = null;
     this._accum = 0;             // accumulated seconds for auto-stepping
+    this.generation = 0;
 
     // ── Graph data (allocated on build) ──
     this.N = 0;
     this.adj = [];               // adjacency list: adj[i] = [neighbour indices]
     this.edges = [];             // [[a,b], ...]
     this.posX = null;            // Float32Array of node x
-    this.posZ = null;            // Float32Array of node z (we lay out in XZ plane)
+    this.posY = null;            // Float32Array of node y
+    this.posZ = null;            // Float32Array of node z (full 3D layout)
     this.degree = null;          // Int32Array of node degree
     this.state = null;           // Uint8Array current state
     this.nextState = null;       // Uint8Array buffer
 
     // ── Three.js objects ──
-    this._nodeMesh = null;
+    this._nodeGeo = null;        // shared SphereGeometry
+    this._nodeMeshes = [];       // one Mesh per node (per-node emissive + pulse)
     this._edgeLines = null;
-    this._dummy = new THREE.Object3D();
+    this._baseScale = null;      // Float32Array degree-based base scale
+    this._pulse = null;          // Float32Array current pulse multiplier
     this._tmpColor = new THREE.Color();
 
     this.restart();
@@ -65,7 +87,20 @@ class Game {
   setRule(v) { this.rule = v; }
   setStepMode(v) { this.stepMode = v; this._accum = 0; }
   setStepSpeed(v) { this.stepSpeed = v; }
-  setSeedPercent(v) { this.seedPercent = v; this._reseed(); this._updateNodeColors(); }
+  setSeedPercent(v) { this.seedPercent = v; this._reseed(); this._updateNodeColors(); this._updateEdgeColors(); }
+
+  // ── Stats for the HUD overlay ────────────────────────────────────────────
+  getStats() {
+    let alive = 0;
+    if (this.state) for (let i = 0; i < this.N; i++) alive += this.state[i];
+    return {
+      generation: this.generation,
+      alive,
+      total: this.N,
+      rule: this.rule,
+      graphType: this.graphType,
+    };
+  }
 
   // ── Build / rebuild everything ───────────────────────────────────────────
   restart() {
@@ -221,10 +256,11 @@ class Game {
   }
 
   // =========================================================================
-  // LAYOUT
+  // LAYOUT (3D)
   // =========================================================================
   _layout() {
     this.posX = new Float32Array(this.N);
+    this.posY = new Float32Array(this.N);
     this.posZ = new Float32Array(this.N);
 
     if (this.graphType === "Grid") {
@@ -237,105 +273,121 @@ class Game {
     this._normalizePositions();
   }
 
+  // Flat grid in the XY plane facing the camera (z = 0).
   _layoutGrid() {
     const side = this._gridSide;
     let i = 0;
     for (let r = 0; r < side; r++) {
       for (let c = 0; c < side; c++) {
         this.posX[i] = c;
-        this.posZ[i] = r;
+        this.posY[i] = r;
+        this.posZ[i] = 0;
         i++;
       }
     }
   }
 
+  // Ring laid in the XZ plane (y = 0) — reads as a halo when viewed from above.
   _layoutRing() {
     const N = this.N;
     const radius = 1;
     for (let i = 0; i < N; i++) {
       const a = (i / N) * Math.PI * 2;
       this.posX[i] = Math.cos(a) * radius;
+      this.posY[i] = 0;
       this.posZ[i] = Math.sin(a) * radius;
     }
   }
 
-  // Fruchterman–Reingold force-directed layout (50 iterations).
+  // Fruchterman–Reingold force-directed layout in 3D (50 iterations).
   _layoutForceDirected() {
     const N = this.N;
     if (N === 0) return;
 
-    // Random initial placement in a disk
+    // Random initial placement: x/y in a unit disk, z spread through [-3, 3].
     for (let i = 0; i < N; i++) {
       const a = Math.random() * Math.PI * 2;
       const r = Math.sqrt(Math.random());
       this.posX[i] = Math.cos(a) * r;
-      this.posZ[i] = Math.sin(a) * r;
+      this.posY[i] = Math.sin(a) * r;
+      this.posZ[i] = (Math.random() * 2 - 1) * 3;
     }
 
     const area = 1.0;                       // unit working area
     const k = Math.sqrt(area / Math.max(1, N)); // ideal edge length
     const dispX = new Float32Array(N);
+    const dispY = new Float32Array(N);
     const dispZ = new Float32Array(N);
     let temp = 0.1;                         // starting "temperature"
     const cool = temp / (FR_ITERATIONS + 1);
 
     for (let it = 0; it < FR_ITERATIONS; it++) {
       dispX.fill(0);
+      dispY.fill(0);
       dispZ.fill(0);
 
       // Repulsive forces between all pairs
       for (let i = 0; i < N; i++) {
         for (let j = i + 1; j < N; j++) {
           let dx = this.posX[i] - this.posX[j];
+          let dy = this.posY[i] - this.posY[j];
           let dz = this.posZ[i] - this.posZ[j];
-          let dist = Math.sqrt(dx * dx + dz * dz) || 1e-4;
+          let dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-4;
           const rep = (k * k) / dist;
-          const ux = dx / dist, uz = dz / dist;
-          dispX[i] += ux * rep; dispZ[i] += uz * rep;
-          dispX[j] -= ux * rep; dispZ[j] -= uz * rep;
+          const ux = dx / dist, uy = dy / dist, uz = dz / dist;
+          dispX[i] += ux * rep; dispY[i] += uy * rep; dispZ[i] += uz * rep;
+          dispX[j] -= ux * rep; dispY[j] -= uy * rep; dispZ[j] -= uz * rep;
         }
       }
 
       // Attractive forces along edges (springs)
       for (const [a, b] of this.edges) {
         let dx = this.posX[a] - this.posX[b];
+        let dy = this.posY[a] - this.posY[b];
         let dz = this.posZ[a] - this.posZ[b];
-        let dist = Math.sqrt(dx * dx + dz * dz) || 1e-4;
+        let dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-4;
         const att = (dist * dist) / k;
-        const ux = dx / dist, uz = dz / dist;
-        dispX[a] -= ux * att; dispZ[a] -= uz * att;
-        dispX[b] += ux * att; dispZ[b] += uz * att;
+        const ux = dx / dist, uy = dy / dist, uz = dz / dist;
+        dispX[a] -= ux * att; dispY[a] -= uy * att; dispZ[a] -= uz * att;
+        dispX[b] += ux * att; dispY[b] += uy * att; dispZ[b] += uz * att;
       }
 
       // Limit displacement by temperature, then cool
       for (let i = 0; i < N; i++) {
-        const d = Math.sqrt(dispX[i] * dispX[i] + dispZ[i] * dispZ[i]) || 1e-4;
+        const d = Math.sqrt(
+          dispX[i] * dispX[i] + dispY[i] * dispY[i] + dispZ[i] * dispZ[i]
+        ) || 1e-4;
         const lim = Math.min(d, temp);
         this.posX[i] += (dispX[i] / d) * lim;
+        this.posY[i] += (dispY[i] / d) * lim;
         this.posZ[i] += (dispZ[i] / d) * lim;
       }
       temp -= cool;
     }
   }
 
-  // Center and scale node coordinates to fit within ±WORLD_EXTENT.
+  // Center each axis and scale it independently to fill ±WORLD_EXTENT, so the
+  // graph occupies all three dimensions. Flat axes (grid z, ring y) stay flat.
   _normalizePositions() {
     const N = this.N;
     if (N === 0) return;
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (let i = 0; i < N; i++) {
-      if (this.posX[i] < minX) minX = this.posX[i];
-      if (this.posX[i] > maxX) maxX = this.posX[i];
-      if (this.posZ[i] < minZ) minZ = this.posZ[i];
-      if (this.posZ[i] > maxZ) maxZ = this.posZ[i];
+    this._normalizeAxis(this.posX);
+    this._normalizeAxis(this.posY);
+    this._normalizeAxis(this.posZ);
+  }
+
+  _normalizeAxis(arr) {
+    let min = Infinity, max = -Infinity;
+    for (let i = 0; i < this.N; i++) {
+      if (arr[i] < min) min = arr[i];
+      if (arr[i] > max) max = arr[i];
     }
-    const cx = (minX + maxX) / 2;
-    const cz = (minZ + maxZ) / 2;
-    const span = Math.max(maxX - minX, maxZ - minZ) || 1;
-    const scale = (WORLD_EXTENT * 2) / span;
-    for (let i = 0; i < N; i++) {
-      this.posX[i] = (this.posX[i] - cx) * scale;
-      this.posZ[i] = (this.posZ[i] - cz) * scale;
+    const span = max - min;
+    const center = (min + max) / 2;
+    // A flat axis (span ~0) stays centered at 0 rather than blowing up.
+    const scale = span > 1e-6 ? (WORLD_EXTENT * 2) / span : 0;
+    for (let i = 0; i < this.N; i++) {
+      arr[i] = (arr[i] - center) * scale;
     }
   }
 
@@ -343,6 +395,7 @@ class Game {
   // STATE
   // =========================================================================
   _reseed() {
+    this.generation = 0;
     if (!this.state) return;
     for (let i = 0; i < this.N; i++) {
       this.state[i] = Math.random() < this.seedPercent ? 1 : 0;
@@ -364,11 +417,21 @@ class Game {
       next[i] = this._applyRule(state[i], alive, neigh.length);
     }
 
+    // Pop a pulse on every node whose state changed this step (compare against
+    // the still-current `state` before we swap buffers).
+    if (this._pulse) {
+      for (let i = 0; i < N; i++) {
+        if (next[i] !== state[i]) this._pulse[i] = PULSE_SCALE;
+      }
+    }
+
     // Swap buffers
     this.state = next;
     this.nextState = state;
+    this.generation++;
 
     this._updateNodeColors();
+    this._updateEdgeColors();
   }
 
   _applyRule(cur, alive, deg) {
@@ -397,57 +460,102 @@ class Game {
   _buildMeshes() {
     this._disposeMeshes();
 
-    // ── Edges: a single static LineSegments ──
+    // ── Edges: a single LineSegments with per-vertex colours ──
     const edgePos = new Float32Array(this.edges.length * 6);
     let e = 0;
     for (const [a, b] of this.edges) {
-      edgePos[e++] = this.posX[a]; edgePos[e++] = -0.01; edgePos[e++] = this.posZ[a];
-      edgePos[e++] = this.posX[b]; edgePos[e++] = -0.01; edgePos[e++] = this.posZ[b];
+      edgePos[e++] = this.posX[a]; edgePos[e++] = this.posY[a]; edgePos[e++] = this.posZ[a];
+      edgePos[e++] = this.posX[b]; edgePos[e++] = this.posY[b]; edgePos[e++] = this.posZ[b];
     }
     const edgeGeo = new THREE.BufferGeometry();
     edgeGeo.setAttribute("position", new THREE.BufferAttribute(edgePos, 3));
+    edgeGeo.setAttribute(
+      "color",
+      new THREE.BufferAttribute(new Float32Array(this.edges.length * 6), 3)
+    );
     this._edgeLines = new THREE.LineSegments(
       edgeGeo,
-      new THREE.LineBasicMaterial({ color: EDGE_COLOR })
+      new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
     );
     this.scene.add(this._edgeLines);
 
-    // ── Nodes: InstancedMesh of flat circles facing up (+Y) ──
-    const circle = new THREE.CircleGeometry(NODE_RADIUS, 18);
-    circle.rotateX(-Math.PI / 2); // lay flat in the XZ plane, facing the camera
-    const mat = new THREE.MeshBasicMaterial();
-    this._nodeMesh = new THREE.InstancedMesh(circle, mat, Math.max(1, this.N));
-    this._nodeMesh.count = this.N;
-    this._nodeMesh.frustumCulled = false;
-    this.scene.add(this._nodeMesh);
+    // ── Nodes: one shaded sphere Mesh each (per-node emissive glow + pulse) ──
+    this._nodeGeo = new THREE.SphereGeometry(NODE_RADIUS, 12, 8);
 
     // Per-node degree-based scale (hubs slightly larger — visible on scale-free)
     let maxDeg = 1;
     for (let i = 0; i < this.N; i++) maxDeg = Math.max(maxDeg, this.degree[i]);
-    this._nodeScale = new Float32Array(this.N);
-    for (let i = 0; i < this.N; i++) {
-      this._nodeScale[i] = 0.85 + 0.9 * (this.degree[i] / maxDeg);
-    }
+    this._baseScale = new Float32Array(this.N);
+    this._pulse = new Float32Array(this.N);
+    this._nodeMeshes = [];
 
-    const d = this._dummy;
     for (let i = 0; i < this.N; i++) {
-      d.position.set(this.posX[i], 0, this.posZ[i]);
-      d.scale.setScalar(this._nodeScale[i]);
-      d.updateMatrix();
-      this._nodeMesh.setMatrixAt(i, d.matrix);
+      const base = 0.85 + 0.9 * (this.degree[i] / maxDeg);
+      this._baseScale[i] = base;
+      this._pulse[i] = 1;
+
+      const mat = new THREE.MeshPhongMaterial({ shininess: 40 });
+      const mesh = new THREE.Mesh(this._nodeGeo, mat);
+      mesh.position.set(this.posX[i], this.posY[i], this.posZ[i]);
+      mesh.scale.setScalar(base);
+      this.scene.add(mesh);
+      this._nodeMeshes.push(mesh);
     }
-    this._nodeMesh.instanceMatrix.needsUpdate = true;
 
     this._updateNodeColors();
+    this._updateEdgeColors();
   }
 
   _updateNodeColors() {
-    if (!this._nodeMesh) return;
+    if (!this._nodeMeshes.length) return;
     for (let i = 0; i < this.N; i++) {
-      this._tmpColor.copy(this.state[i] ? COLOR_ALIVE : COLOR_DEAD);
-      this._nodeMesh.setColorAt(i, this._tmpColor);
+      const mat = this._nodeMeshes[i].material;
+      if (this.state[i]) {
+        mat.color.copy(COLOR_ALIVE);
+        mat.emissive.copy(COLOR_ALIVE_EMISSIVE);
+        mat.emissiveIntensity = 0.8;
+      } else {
+        mat.color.copy(COLOR_DEAD);
+        mat.emissive.copy(COLOR_DEAD_EMISSIVE);
+        mat.emissiveIntensity = 1.0;
+      }
     }
-    if (this._nodeMesh.instanceColor) this._nodeMesh.instanceColor.needsUpdate = true;
+  }
+
+  _updateEdgeColors() {
+    if (!this._edgeLines) return;
+    const colors = this._edgeLines.geometry.getAttribute("color");
+    const arr = colors.array;
+    let o = 0;
+    for (const [a, b] of this.edges) {
+      const both = this.state[a] && this.state[b];
+      if (both) {
+        this._tmpColor.copy(COLOR_EDGE_ALIVE).multiplyScalar(EDGE_ALIVE_OPACITY);
+      } else {
+        this._tmpColor.copy(COLOR_EDGE_DEAD).multiplyScalar(EDGE_DEAD_OPACITY);
+      }
+      arr[o++] = this._tmpColor.r; arr[o++] = this._tmpColor.g; arr[o++] = this._tmpColor.b;
+      arr[o++] = this._tmpColor.r; arr[o++] = this._tmpColor.g; arr[o++] = this._tmpColor.b;
+    }
+    colors.needsUpdate = true;
+  }
+
+  // Ease every pulsing node back toward its base scale (1.4 → 1.0 over ~0.3s).
+  _updatePulses(dt) {
+    if (!this._pulse) return;
+    const t = Math.min(1, dt / PULSE_TIME);
+    for (let i = 0; i < this.N; i++) {
+      if (this._pulse[i] > 1.0001) {
+        this._pulse[i] += (1 - this._pulse[i]) * t;
+        if (this._pulse[i] <= 1.0001) this._pulse[i] = 1;
+        this._nodeMeshes[i].scale.setScalar(this._baseScale[i] * this._pulse[i]);
+      }
+    }
   }
 
   _disposeMeshes() {
@@ -457,12 +565,16 @@ class Game {
       this._edgeLines.material.dispose();
       this._edgeLines = null;
     }
-    if (this._nodeMesh) {
-      this.scene.remove(this._nodeMesh);
-      this._nodeMesh.geometry.dispose();
-      this._nodeMesh.material.dispose();
-      this._nodeMesh.dispose();
-      this._nodeMesh = null;
+    if (this._nodeMeshes.length) {
+      for (const mesh of this._nodeMeshes) {
+        this.scene.remove(mesh);
+        mesh.material.dispose();
+      }
+      this._nodeMeshes = [];
+    }
+    if (this._nodeGeo) {
+      this._nodeGeo.dispose();
+      this._nodeGeo = null;
     }
   }
 
@@ -488,6 +600,9 @@ class Game {
       if (steps === 4) this._accum = 0;
     }
     // Manual mode: stepping is driven by the GUI "Step" button only.
+
+    // Pulse easing runs every frame regardless of step cadence.
+    this._updatePulses(dt);
   }
 }
 
