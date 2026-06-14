@@ -182,6 +182,10 @@ class Game {
 
     this._boardX0 = boardX0;
     this._boardX1 = boardX1;
+    // Hard side walls — balls bounce off these so they can't drift off the
+    // edge of the peg triangle and break the distribution
+    this._wallLeft  = boardX0;
+    this._wallRight = boardX1;
     this._bucketTop = bucketTop;
     this._bucketBot = bucketBot;
     this._colSpacing = colSpacing;
@@ -241,6 +245,9 @@ class Game {
     }
     // bottom floor
     wallVerts.push(this._boardX0, this._bucketBot, 0, this._boardX1, this._bucketBot, 0);
+    // Side walls — full-height barriers from the top of the board to the floor
+    wallVerts.push(this._wallLeft,  WORLD_TOP, 0, this._wallLeft,  this._bucketBot, 0);
+    wallVerts.push(this._wallRight, WORLD_TOP, 0, this._wallRight, this._bucketBot, 0);
     const wgeo = new THREE.BufferGeometry();
     wgeo.setAttribute("position", new THREE.Float32BufferAttribute(wallVerts, 3));
     this._wallLines = new THREE.LineSegments(wgeo, new THREE.LineBasicMaterial({ color: 0x1a3a6a }));
@@ -407,6 +414,10 @@ class Game {
             vx += (Math.random() - 0.5) * 0.04;
           }
         }
+
+        // Hard side walls — keep balls inside the peg grid
+        if (x < this._wallLeft + PARTICLE_RADIUS)  { x = this._wallLeft + PARTICLE_RADIUS;  vx = Math.abs(vx) * 0.4; }
+        if (x > this._wallRight - PARTICLE_RADIUS) { x = this._wallRight - PARTICLE_RADIUS; vx = -Math.abs(vx) * 0.4; }
 
         // Transition to SETTLING when entering bucket zone
         if (y < this._bucketTop) {

@@ -22,7 +22,8 @@ function update() {
 }
 
 function _initCamera() {
-  camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+  // Vertical range ±1.15 (zoomed out ~15%); horizontal scaled by the same factor
+  camera = new THREE.OrthographicCamera(-1.15, 1.15, 1.15, -1.15, 0.1, 100);
   camera.position.set(0, 0, 10);
   camera.lookAt(0, 0, 0);
 }
@@ -36,11 +37,18 @@ function _initRenderer() {
   const container = document.getElementById("threejs");
   if (!container) return;
 
+  // Mobile: stop the page scrolling/zooming while interacting with the board
+  container.style.touchAction = "none";
+  container.style.overflow = "hidden";
+
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.setAnimationLoop(update);
   container.appendChild(renderer.domElement);
+
+  // Prevent touch-drag from scrolling the page behind the canvas
+  container.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
 
   _resizeCamera(container);
   window.addEventListener("resize", () => _resizeCamera(container));
@@ -52,10 +60,11 @@ function _resizeCamera(container) {
   const aspect = w / h;
   renderer.setSize(w, h);
 
-  camera.left = -aspect;
-  camera.right = aspect;
-  camera.top = 1;
-  camera.bottom = -1;
+  const ZOOM = 1.15;   // zoom out ~15% for more breathing room (esp. on mobile)
+  camera.left = -aspect * ZOOM;
+  camera.right = aspect * ZOOM;
+  camera.top = ZOOM;
+  camera.bottom = -ZOOM;
   camera.updateProjectionMatrix();
 
   if (game) game.onResize(camera);
@@ -145,6 +154,8 @@ function _initDropButton() {
     pressStyle();
     game && game.startHold();
   }, { passive: false });
+  // Holding the button on mobile shouldn't scroll the page
+  btn.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
   window.addEventListener("touchend", () => {
     releaseStyle();
     game && game.stopHold();
