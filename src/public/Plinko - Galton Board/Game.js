@@ -382,6 +382,10 @@ class Game {
       // Gravity
       vy -= g * dt;
 
+      // Euler position integration
+      x += vx * dt;
+      y += vy * dt;
+
       // ── ACTIVE: collide with pegs ──
       if (state === STATE_ACTIVE) {
         for (let p = 0; p < this._pegs.length; p++) {
