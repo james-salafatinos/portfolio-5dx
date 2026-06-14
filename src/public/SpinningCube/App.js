@@ -30,11 +30,14 @@ function _initCamera() {
     0.1,
     100
   );
-  camera.position.set(0, 0, 4);
+  camera.position.set(0, 5, 8);
 }
 
 function _initScene() {
   scene = new THREE.Scene();
+
+  const axesHelper = new THREE.AxesHelper(3);
+  scene.add(axesHelper);
 
   const ambientLight = new THREE.AmbientLight("#ffffff", 0.4);
   scene.add(ambientLight);
@@ -84,4 +87,6 @@ function _initControls() {
   controls.enableDamping = true;
   controls.minDistance = 1;
   controls.maxDistance = 20;
+  controls.target.set(0, 5, 0);
+  controls.update();
 }
