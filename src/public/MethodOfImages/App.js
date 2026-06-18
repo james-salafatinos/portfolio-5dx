@@ -103,6 +103,13 @@ function _initGUI() {
   };
 
   const gui = new GUI({ container: guiContainer, title: "Method of Images" });
+
+  const isMobile = window.innerWidth < 600;
+  if (isMobile) {
+    gui.close();
+    gui.domElement.style.maxWidth = "200px";
+  }
+
   gui.add(params, "showEquip").name("Show Equipotentials").onChange((v) => game.setShowEquip(v));
   gui.add(params, "showField").name("Show Field Lines").onChange((v) => game.setShowField(v));
   gui.add(params, "showImage").name("Show Image Charge").onChange((v) => game.setShowImage(v));
@@ -135,6 +142,14 @@ function _initHUD() {
     pointer-events: none;
     user-select: none;
   `;
+  const isMobile = window.innerWidth < 600;
+  if (isMobile) {
+    hud.style.fontSize = "9px";
+    hud.style.padding = "4px";
+    hud.style.maxWidth = "160px";
+    hud.style.lineHeight = "1.2";
+  }
+
   container.appendChild(hud);
   game.setHUD(hud);
   game.dirty = true; // force a first HUD render
