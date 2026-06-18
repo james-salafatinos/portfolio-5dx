@@ -1,18 +1,20 @@
 import * as THREE from "/modules/three.module.js";
 import { GUI } from "/modules/lil-gui.module.min.js";
+import { OrbitControls } from "/modules/OrbitControls.js";
 import { Game } from "./Game.js";
 
-let camera, scene, renderer, game, clock, heightCtrl, params;
+let camera, scene, renderer, controls, game, clock, heightCtrl, params;
 
 create();
 
 function create() {
-  _initCamera();
   _initScene();
+  _initCamera();
   _initRenderer();
+  _initControls();
 
   game = new Game(scene);
-  game.initInput(renderer.domElement, camera);
+  game.initInput(renderer.domElement, camera, controls);
 
   _initGUI();
   _initHUD();
@@ -22,9 +24,11 @@ function create() {
 
 function update() {
   const dt = clock.getDelta();
+  controls.update();
   game.update(dt);
 
-  // Keep the height slider in sync while the charge is dragged.
+  // Keep the height slider in sync while the charge is dragged (y is fixed by
+  // the slider, but a Reset / programmatic change should reflect back).
   if (params && heightCtrl && Math.abs(params.height - game.h) > 1e-4) {
     params.height = game.h;
     heightCtrl.updateDisplay();
@@ -33,16 +37,17 @@ function update() {
   renderer.render(scene, camera);
 }
 
-function _initCamera() {
-  // Orthographic, world coordinates: y in [-1, +1], x scaled by aspect.
-  camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
-  camera.position.set(0, 0, 10);
-  camera.lookAt(0, 0, 0);
-}
-
 function _initScene() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x05080f);
+}
+
+function _initCamera() {
+  const container = document.getElementById("threejs");
+  const aspect = container ? container.clientWidth / container.clientHeight : 1;
+  camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 100);
+  camera.position.set(0, 2.5, 6);
+  camera.lookAt(0, 0, 0);
 }
 
 function _initRenderer() {
@@ -58,25 +63,29 @@ function _initRenderer() {
   renderer.setAnimationLoop(update);
   container.appendChild(renderer.domElement);
 
-  container.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
-
-  _resizeCamera(container);
-  window.addEventListener("resize", () => _resizeCamera(container));
+  window.addEventListener("resize", () => _resize(container));
 }
 
-function _resizeCamera(container) {
+function _initControls() {
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 1;
+  controls.maxDistance = 20;
+  controls.target.set(0, 0.4, 0);
+
+  const isMobile = window.innerWidth < 600;
+  if (isMobile) controls.enablePan = false;
+
+  controls.update();
+}
+
+function _resize(container) {
   const w = container.clientWidth;
   const h = container.clientHeight;
-  const aspect = w / h;
   renderer.setSize(w, h);
-
-  camera.left = -aspect;
-  camera.right = aspect;
-  camera.top = 1;
-  camera.bottom = -1;
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-
-  if (game) game.onResize(camera);
 }
 
 function _initGUI() {
@@ -91,13 +100,15 @@ function _initGUI() {
     showEquip: true,
     showField: true,
     showImage: true,
-    height: 0.5,
+    height: 1.2,
     q: 2.0,
-    fieldLines: 16,
+    fieldLines: 24,
     reset: () => {
       game.reset();
       params.showEquip = params.showField = params.showImage = true;
-      params.height = game.h; params.q = game.q; params.fieldLines = game.fieldLineCount;
+      params.height = game.h;
+      params.q = game.q;
+      params.fieldLines = game.fieldLineCount;
       gui.controllersRecursive().forEach((c) => c.updateDisplay());
     },
   };
@@ -113,7 +124,7 @@ function _initGUI() {
   gui.add(params, "showEquip").name("Show Equipotentials").onChange((v) => game.setShowEquip(v));
   gui.add(params, "showField").name("Show Field Lines").onChange((v) => game.setShowField(v));
   gui.add(params, "showImage").name("Show Image Charge").onChange((v) => game.setShowImage(v));
-  heightCtrl = gui.add(params, "height", 0.1, 0.9, 0.01).name("Charge Height").onChange((v) => game.setHeight(v));
+  heightCtrl = gui.add(params, "height", 0.2, 2.5, 0.01).name("Charge Height").onChange((v) => game.setHeight(v));
   gui.add(params, "q", 1, 5, 0.1).name("Charge Magnitude q").onChange((v) => game.setMagnitude(v));
   gui.add(params, "fieldLines", 8, 32, 1).name("Field Line Count").onChange((v) => game.setFieldCount(v));
   gui.add(params, "reset").name("Reset");
