@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#7A4A23" />
+  <title>Poopva 💩 — Share every movement</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='.9em'%20font-size='90'%3E💩%3C/text%3E%3C/svg%3E" />
+  <meta name="description" content="Strava, but for pooping. Log it, rank it on the Bristol scale, earn Poodos." />
+  <meta property="og:title" content="Poopva 💩 — Strava, but for pooping" />
+  <meta property="og:description" content="Log your poo, rank it on the Bristol scale, give your friends Poodos. The leaderboard your gut deserves." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary" />
+
+  <!-- React 18 + Tailwind from CDN (no build step, no ES modules) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes poopva-spin { to { transform: rotate(360deg); } }
+    .poopva-spinner {
+      width: 36px; height: 36px; border-radius: 9999px;
+      border: 4px solid #e7e5e4; border-top-color: #7A4A23;
+      animation: poopva-spin 0.8s linear infinite;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
+
+const { useState, useEffect, useRef } = React;
+const e = React.createElement;
+
+const BRAND = "#7A4A23";
+const BRAND_DARK = "#5C3A21";
+const ACCENT = "#C77B3B";
+const CREAM = "#FBF7F1";
+const TINT = "#F4ECE3";
+
+const API = "/api/poopva";
+
+/* ------------------------------------------------------------------ *
+ * Identity — the ONLY two localStorage keys this app uses.
+ * ------------------------------------------------------------------ */
+const LS_USER = "poopva:userId";
+const LS_NAME = "poopva:username";
+
+function readIdentity() {
+  let userId = localStorage.getItem(LS_USER);
+  if (!userId) {
+    userId = crypto.randomUUID();
+    localStorage.setItem(LS_USER, userId);
+  }
+  const username = localStorage.getItem(LS_NAME) || null;
+  return { userId, username };
+}
+
+/* ------------------------------------------------------------------ *
+ * Deterministic avatar (emoji + colour) derived from a username, so
+ * everyone has a stable, recognisable face without storing one.
+ * ------------------------------------------------------------------ */
+const AVATAR_EMOJIS = ["🧻", "💩", "🚽", "🪠", "🧴", "🌀", "🍫", "🩺", "🎩", "🌟"];
+const AVATAR_COLORS = ["#7A4A23", "#5C3A21", "#B45309", "#15803D", "#8B5E34", "#A16207", "#92400E", "#3F6212", "#9A3412", "#1E3A8A"];
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < (s || "").length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+function avatarFor(name) {
+  const h = hashStr(name || "?");
+  return { emoji: AVATAR_EMOJIS[h % AVATAR_EMOJIS.length], color: AVATAR_COLORS[h % AVATAR_COLORS.length] };
+}
+
+/* ------------------------------------------------------------------ *
+ * Icons
+ * ------------------------------------------------------------------ */
+function Icon({ size = 24, children, ...rest }) {
+  return e("svg", _extends({
+    width: size, height: size, viewBox: "0 0 24 24", fill: "none",
+    stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round"
+  }, rest), children);
+}
+const Home = p => e(Icon, p, e("path", { d: "M3 10.5 12 3l9 7.5" }), e("path", { d: "M5 9.5V20h14V9.5" }));
+const BookOpen = p => e(Icon, p, e("path", { d: "M12 6v15" }), e("path", { d: "M3 5h6a3 3 0 0 1 3 3v0a3 3 0 0 1 3-3h6v14h-6a3 3 0 0 0-3 3v0a3 3 0 0 0-3-3H3z" }));
+const Plus = p => e(Icon, p, e("path", { d: "M12 5v14M5 12h14" }));
+const User = p => e(Icon, p, e("circle", { cx: "12", cy: "8", r: "4" }), e("path", { d: "M4 21a8 8 0 0 1 16 0" }));
+const MapPin = p => e(Icon, p, e("path", { d: "M12 21s7-6.5 7-11a7 7 0 1 0-14 0c0 4.5 7 11 7 11z" }), e("circle", { cx: "12", cy: "10", r: "2.5" }));
+const Clock = p => e(Icon, p, e("circle", { cx: "12", cy: "12", r: "9" }), e("path", { d: "M12 7v5l3 2" }));
+const Camera = p => e(Icon, p, e("path", { d: "M3 8h3l2-2h8l2 2h3v12H3z" }), e("circle", { cx: "12", cy: "13", r: "3.5" }));
+const X = p => e(Icon, p, e("path", { d: "M6 6l12 12M18 6 6 18" }));
+const Crosshair = p => e(Icon, p, e("circle", { cx: "12", cy: "12", r: "9" }), e("path", { d: "M12 2v4M12 18v4M2 12h4M18 12h4" }));
+const MessageCircle = p => e(Icon, p, e("path", { d: "M21 11.5a8.5 8.5 0 0 1-12.4 7.6L3 21l1.9-5.6A8.5 8.5 0 1 1 21 11.5z" }));
+const Trash2 = p => e(Icon, p, e("path", { d: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" }));
+const Flame = p => e(Icon, p, e("path", { d: "M12 3c1.2 3 4 4.2 4 8a4 4 0 0 1-8 0c0-1.2.6-2.2 1.2-2.8C9.3 11 12 9.2 12 3z" }));
+const Award = p => e(Icon, p, e("circle", { cx: "12", cy: "9", r: "6" }), e("path", { d: "M9 14l-1.2 7L12 19l4.2 2L15 14" }));
+const Calendar = p => e(Icon, p, e("rect", { x: "3", y: "5", width: "18", height: "16", rx: "2" }), e("path", { d: "M3 9h18M8 3v4M16 3v4" }));
+const TrendingUp = p => e(Icon, p, e("path", { d: "M3 17l6-6 4 4 7-7" }), e("path", { d: "M17 8h4v4" }));
+const Lock = p => e(Icon, p, e("rect", { x: "5", y: "11", width: "14", height: "9", rx: "2" }), e("path", { d: "M8 11V8a4 4 0 0 1 8 0v3" }));
+
+/* ------------------------------------------------------------------ *
+ * Formatting helpers
+ * ------------------------------------------------------------------ */
+function timeAgo(iso) {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  const m = s / 60;
+  if (m < 60) return Math.floor(m) + "m ago";
+  const h = m / 60;
+  if (h < 24) return Math.floor(h) + "h ago";
+  return Math.floor(h / 24) + "d ago";
+}
+function dayKey(iso) {
+  const d = new Date(iso);
+  return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+}
+function autoTitle(iso) {
+  const hr = new Date(iso).getHours();
+  if (hr < 5) return "Midnight Run";
+  if (hr < 11) return "Morning Movement";
+  if (hr < 14) return "Midday Constitutional";
+  if (hr < 18) return "Afternoon Delight";
+  if (hr < 22) return "Evening Offload";
+  return "Late-Night Special";
+}
+function localNowInput() {
+  const d = new Date(), pad = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
+
+/* ------------------------------------------------------------------ *
+ * Bristol stool chart data + drawings
+ * ------------------------------------------------------------------ */
+const BRISTOL = [
+  { type: 1, name: "Separate hard lumps", short: "Hard lumps", indication: "Constipated", chip: "bg-red-100 text-red-700", bar: "#DC2626", desc: "Hard, separate pellets like nuts that are difficult, sometimes painful, to pass. A sign stool has sat in the colon too long." },
+  { type: 2, name: "Lumpy & sausage-shaped", short: "Lumpy log", indication: "Mild constipation", chip: "bg-orange-100 text-orange-700", bar: "#EA580C", desc: "A firm, lumpy sausage. Still on the constipated end — usually a nudge toward more water and fibre." },
+  { type: 3, name: "Sausage with cracks", short: "Cracked log", indication: "Healthy", chip: "bg-lime-100 text-lime-700", bar: "#65A30D", desc: "Sausage-shaped with cracks along the surface. Comfortably inside the normal, healthy range." },
+  { type: 4, name: "Smooth & soft snake", short: "Smooth", indication: "Ideal", chip: "bg-green-100 text-green-700", bar: "#16A34A", desc: "Smooth and soft like a snake, passing easily. The gold standard — what most people are aiming for." },
+  { type: 5, name: "Soft blobs, clear edges", short: "Soft blobs", indication: "Low fibre", chip: "bg-yellow-100 text-yellow-700", bar: "#CA8A04", desc: "Soft blobs with clean-cut edges that pass easily. Leans loose and can hint at a lack of fibre." },
+  { type: 6, name: "Mushy, ragged edges", short: "Mushy", indication: "Loose", chip: "bg-orange-100 text-orange-700", bar: "#EA580C", desc: "Fluffy, mushy pieces with ragged edges. Trending toward diarrhoea, often a faster transit time." },
+  { type: 7, name: "Liquid, no solid pieces", short: "Liquid", indication: "Diarrhoea", chip: "bg-red-100 text-red-700", bar: "#DC2626", desc: "Entirely liquid, no solid pieces. Watery diarrhoea — keep an eye on hydration." },
+];
+const B = t => BRISTOL[t - 1];
+
+function BristolSvg({ type, size = 72 }) {
+  const fill = "#8B5E34", stroke = "#5C3A21", h = size * 44 / 72;
+  const p = { width: size, height: h, viewBox: "0 0 80 48" };
+  switch (type) {
+    case 1:
+      return e("svg", p, e("g", { fill }, e("circle", { cx: "14", cy: "25", r: "7" }), e("circle", { cx: "32", cy: "22", r: "7" }), e("circle", { cx: "50", cy: "25", r: "7" }), e("circle", { cx: "66", cy: "23", r: "6" })));
+    case 2:
+      return e("svg", p, e("g", { fill }, e("rect", { x: "9", y: "18", width: "62", height: "16", rx: "8" }), e("circle", { cx: "22", cy: "19", r: "6" }), e("circle", { cx: "38", cy: "18", r: "6" }), e("circle", { cx: "54", cy: "19", r: "6" })));
+    case 3:
+      return e("svg", p, e("rect", { x: "7", y: "19", width: "66", height: "13", rx: "6.5", fill }), e("g", { stroke, strokeWidth: "2", strokeLinecap: "round", fill: "none" }, e("path", { d: "M24 19 l-3 13" }), e("path", { d: "M40 19 l3 13" }), e("path", { d: "M56 19 l-2 13" })));
+    case 4:
+      return e("svg", p, e("path", { d: "M10 30 q14 -16 28 -1 q14 15 32 -3", stroke: fill, strokeWidth: "13", fill: "none", strokeLinecap: "round" }));
+    case 5:
+      return e("svg", p, e("g", { fill }, e("ellipse", { cx: "20", cy: "27", rx: "11", ry: "8" }), e("ellipse", { cx: "44", cy: "24", rx: "9", ry: "7" }), e("ellipse", { cx: "63", cy: "28", rx: "8", ry: "6" })));
+    case 6:
+      return e("svg", p, e("g", { fill }, e("circle", { cx: "22", cy: "27", r: "9" }), e("circle", { cx: "34", cy: "22", r: "8" }), e("circle", { cx: "46", cy: "27", r: "9" }), e("circle", { cx: "56", cy: "23", r: "7" }), e("circle", { cx: "40", cy: "31", r: "8" }), e("circle", { cx: "29", cy: "32", r: "6" })));
+    case 7:
+      return e("svg", p, e("ellipse", { cx: "40", cy: "33", rx: "30", ry: "8", fill }), e("path", { d: "M12 21 q6 -5 12 0 q6 5 12 0 q6 -5 12 0 q6 5 12 0", stroke: fill, strokeWidth: "3", fill: "none", strokeLinecap: "round", opacity: "0.7" }));
+    default:
+      return null;
+  }
+}
+
+const FEELINGS = [
+  { key: "effortless", emoji: "😌", label: "Effortless" },
+  { key: "normal", emoji: "🙂", label: "Normal" },
+  { key: "strain", emoji: "😣", label: "A struggle" },
+  { key: "rough", emoji: "😖", label: "Rough one" },
+  { key: "explosive", emoji: "🚀", label: "Explosive" },
+  { key: "zen", emoji: "🧘", label: "Zen" },
+];
+const feeling = k => FEELINGS.find(f => f.key === k);
+
+const DURATIONS = [
+  { label: "< 2 min", emoji: "⚡" },
+  { label: "~5 min", emoji: "🙂" },
+  { label: "~10 min", emoji: "📖" },
+  { label: "15 min +", emoji: "🧘" },
+];
+
+function fileToThumb(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 240;
+        let { width, height } = img;
+        if (width >= height && width > max) { height = height * max / width; width = max; }
+        else if (height > max) { width = width * max / height; height = max; }
+        const c = document.createElement("canvas");
+        c.width = width; c.height = height;
+        c.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(c.toDataURL("image/jpeg", 0.6));
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Small presentational bits
+ * ------------------------------------------------------------------ */
+function Pill({ children, style }) {
+  return e("span", { className: "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium", style: { backgroundColor: TINT, color: BRAND_DARK, ...style } }, children);
+}
+function Dot({ color }) {
+  return e("span", { style: { width: 8, height: 8, borderRadius: 9999, background: color, display: "inline-block" } });
+}
+function Label({ children }) {
+  return e("div", { className: "text-xs font-bold uppercase tracking-wide text-stone-500" }, children);
+}
+function Spinner({ note }) {
+  return e("div", { className: "flex flex-col items-center justify-center gap-3 py-16" },
+    e("div", { className: "poopva-spinner" }),
+    note && e("div", { className: "text-sm font-medium text-stone-400" }, note));
+}
+
+/* ------------------------------------------------------------------ *
+ * Feed card — consumes a server-shaped log directly.
+ * ------------------------------------------------------------------ */
+function Card({ log, mine, given, onPoodos, onComment, onDelete }) {
+  const [openC, setOpenC] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const b = B(log.bristolType), f = feeling(log.feeling), dur = log.duration;
+  const av = avatarFor(log.username);
+  const poodos = (log.poodos || []).length;
+  const comments = log.comments || [];
+
+  return e("div", { className: "rounded-3xl bg-white border border-stone-200 p-4 shadow-sm" },
+    e("div", { className: "flex items-start gap-3" },
+      e("div", { className: "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl", style: { background: av.color, color: "#fff" } }, av.emoji),
+      e("div", { className: "min-w-0 flex-1" },
+        e("div", { className: "flex items-center gap-2" },
+          e("span", { className: "font-bold text-stone-800" }, log.username),
+          mine && e("span", { className: "rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-500" }, "You")),
+        e("div", { className: "mt-0.5 flex items-center gap-1 text-xs text-stone-400" },
+          e("span", null, timeAgo(log.timestamp)),
+          log.spot && e(React.Fragment, null, e("span", null, "\xB7"), e(MapPin, { size: 12 }), e("span", { className: "truncate" }, log.spot)))),
+      e("div", { className: "shrink-0 opacity-90" }, e(BristolSvg, { type: log.bristolType, size: 56 }))),
+    e("div", { className: "mt-3" },
+      e("div", { className: "font-extrabold text-stone-900" }, autoTitle(log.timestamp)),
+      log.notes && e("p", { className: "mt-0.5 text-sm leading-snug text-stone-600" }, log.notes)),
+    e("div", { className: "mt-3 flex flex-wrap gap-2" },
+      e(Pill, null, e(Dot, { color: b.bar }), "Type ", b.type, " \xB7 ", b.short),
+      f && e(Pill, null, e("span", null, f.emoji), f.label),
+      dur && e(Pill, null, e(Clock, { size: 14 }), dur)),
+    log.photoBase64 && e("img", { src: log.photoBase64, alt: "logged", className: "mt-3 h-40 w-full rounded-2xl object-cover" }),
+    e("div", { className: "mt-3 flex items-center gap-2 border-t border-stone-100 pt-3" },
+      e("button", { onClick: () => onPoodos(log.logId), className: "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition", style: given ? { background: ACCENT, color: "#fff" } : { background: TINT, color: BRAND_DARK } },
+        e("span", null, "💩"), poodos),
+      e("button", { onClick: () => setOpenC(v => !v), className: "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-stone-500 hover:bg-stone-50" },
+        e(MessageCircle, { size: 16 }), comments.length),
+      e("div", { className: "flex-1" }),
+      mine && !confirm && e("button", { onClick: () => setConfirm(true), className: "rounded-full p-2 text-stone-300 hover:text-red-500 hover:bg-red-50" }, e(Trash2, { size: 16 })),
+      mine && confirm && e("div", { className: "flex items-center gap-2 text-xs" },
+        e("span", { className: "text-stone-500" }, "Remove?"),
+        e("button", { onClick: () => setConfirm(false), className: "rounded-full bg-stone-100 px-2.5 py-1 font-semibold text-stone-600" }, "Cancel"),
+        e("button", { onClick: () => onDelete(log.logId), className: "rounded-full bg-red-500 px-2.5 py-1 font-semibold text-white" }, "Delete"))),
+    openC && e("div", { className: "mt-3 space-y-2" },
+      comments.map((c, i) => e("div", { key: i, className: "rounded-2xl bg-stone-50 px-3 py-2 text-sm" },
+        e("span", { className: "font-semibold text-stone-700" }, c.username), " ",
+        e("span", { className: "text-stone-600" }, c.text))),
+      e("div", { className: "flex items-center gap-2" },
+        e("input", {
+          value: draft, onChange: ev => setDraft(ev.target.value),
+          onKeyDown: ev => { if (ev.key === "Enter" && draft.trim()) { onComment(log.logId, draft); setDraft(""); } },
+          placeholder: "Add a comment…",
+          className: "flex-1 rounded-full border border-stone-200 px-3 py-2 text-sm outline-none focus:border-stone-400"
+        }),
+        e("button", { onClick: () => { if (draft.trim()) { onComment(log.logId, draft); setDraft(""); } }, className: "rounded-full px-3 py-2 text-sm font-semibold text-white", style: { background: BRAND } }, "Post"))));
+}
+
+/* ------------------------------------------------------------------ *
+ * Log-a-poop sheet
+ * ------------------------------------------------------------------ */
+function LogSheet({ onSave, onClose, saving }) {
+  const [bristol, setBristol] = useState(null);
+  const [feel, setFeel] = useState(null);
+  const [duration, setDuration] = useState(null);
+  const [spot, setSpot] = useState("");
+  const [note, setNote] = useState("");
+  const [photo, setPhoto] = useState(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [gps, setGps] = useState(null);
+  const [when, setWhen] = useState(localNowInput());
+  const fileRef = useRef(null);
+
+  async function onPhoto(ev) {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    setPhotoBusy(true);
+    try { setPhoto(await fileToThumb(file)); } catch {}
+    setPhotoBusy(false);
+  }
+  function tagGps() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) { setGps({ err: "GPS isn’t available here" }); return; }
+    setGps({ loading: true });
+    navigator.geolocation.getCurrentPosition(pos => {
+      const c = { lat: +pos.coords.latitude.toFixed(4), lng: +pos.coords.longitude.toFixed(4) };
+      setGps({ ok: true });
+      if (!spot) setSpot("📍 " + c.lat + ", " + c.lng);
+    }, () => setGps({ err: "Couldn’t get your location — type a spot instead" }), { timeout: 8000 });
+  }
+  function save() {
+    if (!bristol || saving) return;
+    onSave({
+      bristolType: bristol,
+      feeling: feel || "",
+      duration: duration || "",
+      spot: spot.trim(),
+      notes: note.trim(),
+      photoBase64: photo || null,
+      timestamp: when ? new Date(when).toISOString() : new Date().toISOString(),
+    });
+  }
+
+  return e("div", { className: "fixed inset-0 z-50 flex items-end justify-center bg-black/40", onClick: onClose },
+    e("div", { className: "max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5", onClick: ev => ev.stopPropagation() },
+      e("div", { className: "mx-auto mb-3 h-1.5 w-10 rounded-full bg-stone-200" }),
+      e("div", { className: "flex items-center justify-between" },
+        e("h2", { className: "text-lg font-extrabold text-stone-900" }, "Log a poop 💩"),
+        e("button", { onClick: onClose, className: "rounded-full p-1.5 text-stone-400 hover:bg-stone-100" }, e(X, { size: 20 }))),
+      e("div", { className: "mt-4" },
+        e(Label, null, "Bristol type ", e("span", { className: "text-stone-400" }, "\xB7 required")),
+        e("div", { className: "mt-2 grid grid-cols-4 gap-2" }, BRISTOL.map(b => {
+          const on = bristol === b.type;
+          return e("button", { key: b.type, onClick: () => setBristol(b.type), className: "flex flex-col items-center rounded-2xl border px-1 py-2 transition", style: on ? { borderColor: BRAND, background: TINT } : { borderColor: "#e7e5e4", background: "#fff" } },
+            e(BristolSvg, { type: b.type, size: 42 }),
+            e("span", { className: "mt-1 text-xs font-bold", style: { color: BRAND_DARK } }, "Type ", b.type),
+            e("span", { className: "text-[10px] leading-tight text-stone-400" }, b.short));
+        }))),
+      e("div", { className: "mt-4" },
+        e(Label, null, "How did it feel?"),
+        e("div", { className: "mt-2 flex flex-wrap gap-2" }, FEELINGS.map(f => {
+          const on = feel === f.key;
+          return e("button", { key: f.key, onClick: () => setFeel(on ? null : f.key), className: "rounded-full border px-3 py-1.5 text-sm font-medium transition", style: on ? { borderColor: BRAND, background: TINT, color: BRAND_DARK } : { borderColor: "#e7e5e4", color: "#57534e" } },
+            e("span", { className: "mr-1" }, f.emoji), f.label);
+        }))),
+      e("div", { className: "mt-4" },
+        e(Label, null, "Time on the throne"),
+        e("div", { className: "mt-2 flex flex-wrap gap-2" }, DURATIONS.map(d => {
+          const on = duration === d.label;
+          return e("button", { key: d.label, onClick: () => setDuration(on ? null : d.label), className: "rounded-full border px-3 py-1.5 text-sm font-medium transition", style: on ? { borderColor: BRAND, background: TINT, color: BRAND_DARK } : { borderColor: "#e7e5e4", color: "#57534e" } },
+            e("span", { className: "mr-1" }, d.emoji), d.label);
+        }))),
+      e("div", { className: "mt-4" },
+        e(Label, null, "Spot"),
+        e("div", { className: "mt-2 flex gap-2" },
+          e("input", { value: spot, onChange: ev => setSpot(ev.target.value), placeholder: "Home, office, that one caf\xE9…", className: "flex-1 rounded-2xl border border-stone-200 px-3 py-2.5 text-sm outline-none focus:border-stone-400" }),
+          e("button", { onClick: tagGps, className: "flex items-center gap-1.5 rounded-2xl border border-stone-200 px-3 text-sm font-semibold text-stone-600 hover:bg-stone-50" }, e(Crosshair, { size: 16 }), "GPS")),
+        gps && gps.loading && e("p", { className: "mt-1 text-xs text-stone-400" }, "Locating…"),
+        gps && gps.ok && e("p", { className: "mt-1 text-xs text-green-600" }, "Location tagged"),
+        gps && gps.err && e("p", { className: "mt-1 text-xs text-amber-600" }, gps.err)),
+      e("div", { className: "mt-4" },
+        e(Label, null, "Notes"),
+        e("textarea", { value: note, onChange: ev => setNote(ev.target.value), rows: 2, placeholder: "Anything worth remembering?", className: "mt-2 w-full resize-none rounded-2xl border border-stone-200 px-3 py-2.5 text-sm outline-none focus:border-stone-400" })),
+      e("div", { className: "mt-4" },
+        e(Label, null, "Photo ", e("span", { className: "text-stone-400" }, "\xB7 optional, brave")),
+        e("input", { ref: fileRef, type: "file", accept: "image/*", capture: "environment", className: "hidden", onChange: onPhoto }),
+        !photo
+          ? e("button", { onClick: () => fileRef.current && fileRef.current.click(), className: "mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-stone-300 py-4 text-sm font-medium text-stone-500 hover:bg-stone-50" }, e(Camera, { size: 18 }), photoBusy ? "Processing…" : "Add a photo")
+          : e("div", { className: "mt-2 flex items-center gap-3" },
+              e("img", { src: photo, alt: "preview", className: "h-16 w-16 rounded-xl object-cover" }),
+              e("button", { onClick: () => setPhoto(null), className: "text-sm font-semibold text-red-500" }, "Remove"))),
+      e("div", { className: "mt-4" },
+        e(Label, null, "When"),
+        e("input", { type: "datetime-local", value: when, onChange: ev => setWhen(ev.target.value), className: "mt-2 w-full rounded-2xl border border-stone-200 px-3 py-2.5 text-sm outline-none focus:border-stone-400" })),
+      e("button", { onClick: save, disabled: !bristol || saving, className: "mt-6 w-full rounded-2xl py-3.5 text-base font-extrabold text-white transition disabled:opacity-40", style: { background: bristol ? BRAND : "#a8a29e" } },
+        saving ? "Saving…" : (bristol ? "Log it 💩" : "Pick a Bristol type to continue")),
+      e("div", { className: "h-2" })));
+}
+
+/* ------------------------------------------------------------------ *
+ * Bristol reference tab
+ * ------------------------------------------------------------------ */
+function BristolView() {
+  return e("div", { className: "space-y-4" },
+    e("div", null,
+      e("h2", { className: "text-2xl font-extrabold text-stone-900" }, "The Bristol Stool Chart"),
+      e("p", { className: "mt-2 text-sm leading-relaxed text-stone-600" }, "Developed at the Bristol Royal Infirmary in 1997, this scale sorts human stool into seven types. It’s a handy shorthand for gut health: shape and consistency reflect how long things spent in the colon. Broadly — Types 1–2 lean constipated, Types 3–4 are the healthy sweet spot, and Types 5–7 trend loose to watery.")),
+    e("div", { className: "space-y-3" }, BRISTOL.map(b => e("div", { key: b.type, className: "flex gap-3 rounded-3xl bg-white border border-stone-200 p-4" },
+      e("div", { className: "flex shrink-0 flex-col items-center" },
+        e("div", { className: "flex h-10 w-10 items-center justify-center rounded-full text-lg font-extrabold text-white", style: { background: b.bar } }, b.type),
+        e("div", { className: "mt-2" }, e(BristolSvg, { type: b.type, size: 64 }))),
+      e("div", { className: "min-w-0 flex-1" },
+        e("div", { className: "flex flex-wrap items-center gap-2" },
+          e("h3", { className: "font-bold text-stone-800" }, b.name),
+          e("span", { className: "rounded-full px-2 py-0.5 text-[11px] font-semibold " + b.chip }, b.indication)),
+        e("p", { className: "mt-1 text-sm leading-snug text-stone-600" }, b.desc))))),
+    e("p", { className: "rounded-2xl bg-stone-100 px-4 py-3 text-xs leading-relaxed text-stone-500" }, "Poopva is for fun and self-tracking, not medical advice. Everyone’s normal is a little different — but lasting changes, pain, or anything alarming like blood are worth a chat with a real doctor."));
+}
+
+/* ------------------------------------------------------------------ *
+ * You / stats tab
+ * ------------------------------------------------------------------ */
+function StatTile({ icon, label, value, accent }) {
+  return e("div", { className: "rounded-2xl bg-white border border-stone-200 p-4" },
+    e("div", { className: "flex items-center gap-1.5 text-stone-400" }, icon, e("span", { className: "text-[11px] font-bold uppercase tracking-wide" }, label)),
+    e("div", { className: "mt-1 text-2xl font-extrabold", style: { color: accent || BRAND_DARK } }, value));
+}
+function rankTitle(n) {
+  if (n === 0) return "Fresh Cheeks";
+  if (n < 5) return "Rookie Pooper";
+  if (n < 15) return "Regular";
+  if (n < 40) return "Seasoned Veteran";
+  if (n < 100) return "Bowel Boss";
+  return "Living Legend";
+}
+function StatsView({ stats, myLogs, username }) {
+  if (!stats) return e(Spinner, { note: "Crunching your numbers…" });
+
+  const total = stats.totalLogs;
+  const totalPoodos = stats.totalPoodos;
+  const streak = stats.streak;
+  const weekCount = stats.weekCount;
+
+  // Bristol breakdown comes from the API ([{type,count}]); decorate with colours.
+  const counts = {};
+  (stats.bristolBreakdown || []).forEach(d => { counts[d.type] = d.count; });
+  const dist = BRISTOL.map(b => ({ ...b, count: counts[b.type] || 0 }));
+  const maxC = Math.max(1, ...dist.map(d => d.count));
+
+  // Avg + achievements derive from this user's own logs (already in the feed).
+  const avg = total ? myLogs.reduce((s, l) => s + l.bristolType, 0) / myLogs.length : 0;
+  const avgTxt = total ? avg.toFixed(1) : "—";
+  let avgNote = "Log a few to see your trend.";
+  if (total) {
+    if (avg < 3) avgNote = "Trending firm — more water and fibre might help.";
+    else if (avg > 4.5) avgNote = "Trending loose — worth keeping an eye on.";
+    else avgNote = "Right in the healthy zone. 🎯";
+  }
+  const days = new Set(myLogs.map(l => dayKey(l.timestamp)));
+  const spots = new Set(myLogs.map(l => (l.spot || "").trim()).filter(Boolean));
+  const poodosOf = l => (l.poodos || []).length;
+  const ach = [
+    { e: "🚽", t: "First Timer", d: "Log your first movement", got: total >= 1 },
+    { e: "📅", t: "Regular", d: "Log on 3 different days", got: days.size >= 3 },
+    { e: "🔥", t: "On a Roll", d: "3-day logging streak", got: streak >= 3 },
+    { e: "🥇", t: "Gold Standard", d: "Log a perfect Type 4", got: myLogs.some(l => l.bristolType === 4) },
+    { e: "⭐", t: "Crowd Pleaser", d: "Earn 5 Poodos on one log", got: myLogs.some(l => poodosOf(l) >= 5) },
+    { e: "⚡", t: "Quick Draw", d: "Finish in under 2 minutes", got: myLogs.some(l => l.duration === "< 2 min") },
+    { e: "🧘", t: "Took Your Time", d: "A 15-minute-plus session", got: myLogs.some(l => l.duration === "15 min +") },
+    { e: "🌍", t: "Globetrotter", d: "Log in 3 different spots", got: spots.size >= 3 },
+    { e: "📸", t: "Shutterbug", d: "Attach a photo", got: myLogs.some(l => l.photoBase64) },
+  ];
+  const av = avatarFor(username);
+
+  return e("div", { className: "space-y-5" },
+    e("div", { className: "flex items-center gap-4" },
+      e("div", { className: "flex h-16 w-16 items-center justify-center rounded-full text-3xl", style: { background: av.color, color: "#fff" } }, av.emoji),
+      e("div", null,
+        e("div", { className: "text-xl font-extrabold text-stone-900" }, username),
+        e("div", { className: "text-sm font-semibold", style: { color: ACCENT } }, rankTitle(total)))),
+    e("div", { className: "grid grid-cols-2 gap-3" },
+      e(StatTile, { icon: e(TrendingUp, { size: 14 }), label: "Logs", value: total }),
+      e(StatTile, { icon: e("span", { className: "text-xs" }, "💩"), label: "Poodos", value: totalPoodos, accent: ACCENT }),
+      e(StatTile, { icon: e(Flame, { size: 14 }), label: "Day streak", value: streak }),
+      e(StatTile, { icon: e(Calendar, { size: 14 }), label: "This week", value: weekCount })),
+    e("div", { className: "rounded-3xl bg-white border border-stone-200 p-4" },
+      e("div", { className: "flex items-baseline justify-between" },
+        e("h3", { className: "font-bold text-stone-800" }, "Bristol breakdown"),
+        e("span", { className: "text-sm text-stone-500" }, "avg ", e("b", { style: { color: BRAND_DARK } }, avgTxt))),
+      e("p", { className: "mt-0.5 text-xs text-stone-400" }, avgNote),
+      e("div", { className: "mt-3 space-y-2" }, dist.map(d => e("div", { key: d.type, className: "flex items-center gap-2" },
+        e("div", { className: "flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold text-white", style: { background: d.bar } }, d.type),
+        e("div", { className: "h-3 flex-1 overflow-hidden rounded-full bg-stone-100" }, e("div", { className: "h-full rounded-full", style: { width: d.count / maxC * 100 + "%", background: d.bar, minWidth: d.count ? 8 : 0 } })),
+        e("span", { className: "w-5 text-right text-xs font-semibold text-stone-500" }, d.count))))),
+    e("div", null,
+      e("div", { className: "mb-2 flex items-center gap-2" }, e(Award, { size: 18, style: { color: BRAND } }), e("h3", { className: "font-bold text-stone-800" }, "Achievements")),
+      e("div", { className: "grid grid-cols-2 gap-3" }, ach.map(a => e("div", { key: a.t, className: "rounded-2xl border p-3", style: a.got ? { background: TINT, borderColor: "#e7d8c7" } : { background: "#fafaf9", borderColor: "#f0efed" } },
+        e("div", { className: "flex items-center justify-between" },
+          e("span", { className: "text-2xl", style: { filter: a.got ? "none" : "grayscale(1) opacity(0.5)" } }, a.e),
+          !a.got && e(Lock, { size: 14, className: "text-stone-300" })),
+        e("div", { className: "mt-1 text-sm font-bold", style: { color: a.got ? BRAND_DARK : "#a8a29e" } }, a.t),
+        e("div", { className: "text-[11px] leading-tight text-stone-400" }, a.d))))));
+}
+
+function NavBtn({ active, onClick, icon, label }) {
+  return e("button", { onClick, className: "flex flex-col items-center gap-0.5 py-1", style: { color: active ? BRAND : "#a8a29e" } },
+    icon, e("span", { className: "text-[11px] font-semibold" }, label));
+}
+
+/* ------------------------------------------------------------------ *
+ * Username prompt (first launch)
+ * ------------------------------------------------------------------ */
+function NameModal({ onSubmit }) {
+  const [name, setName] = useState("");
+  function go() { const n = name.trim(); if (n) onSubmit(n); }
+  return e("div", { className: "fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" },
+    e("div", { className: "w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-lg" },
+      e("div", { className: "text-4xl" }, "💩"),
+      e("h2", { className: "mt-2 text-xl font-extrabold text-stone-900" }, "Welcome to Poopva"),
+      e("p", { className: "mt-1 text-sm text-stone-500" }, "Strava, but for pooping. Pick a name the whole feed will see."),
+      e("input", {
+        autoFocus: true, value: name, maxLength: 24,
+        onChange: ev => setName(ev.target.value),
+        onKeyDown: ev => { if (ev.key === "Enter") go(); },
+        placeholder: "e.g. Sir Loggsworth",
+        className: "mt-4 w-full rounded-2xl border border-stone-200 px-4 py-3 text-center text-sm outline-none focus:border-stone-400"
+      }),
+      e("button", { onClick: go, disabled: !name.trim(), className: "mt-4 w-full rounded-2xl py-3 text-base font-extrabold text-white transition disabled:opacity-40", style: { background: BRAND } }, "Enter the throne room"),
+      e("p", { className: "mt-3 text-[11px] text-stone-400" }, "We only store a name and an anonymous ID in your browser.")));
+}
+
+/* ------------------------------------------------------------------ *
+ * Root app — all data lives on the server via /api/poopva.
+ * ------------------------------------------------------------------ */
+function App() {
+  const [identity, setIdentity] = useState(readIdentity);
+  const [tab, setTab] = useState("feed");
+  const [sheet, setSheet] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [feed, setFeed] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
+  const [toast, setToast] = useState("");
+
+  const { userId, username } = identity;
+
+  function flash(msg) { setToast(msg); setTimeout(() => setToast(""), 1800); }
+
+  async function fetchFeed() {
+    try {
+      const res = await fetch(API + "/logs");
+      const data = await res.json();
+      setFeed(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Poopva: failed to load feed", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchStats() {
+    try {
+      const res = await fetch(API + "/users/" + encodeURIComponent(userId) + "/stats");
+      const data = await res.json();
+      setStats(data);
+    } catch (err) {
+      console.error("Poopva: failed to load stats", err);
+    }
+  }
+
+  // Initial load + 30s auto-refresh of the shared feed.
+  useEffect(() => {
+    if (!username) return;
+    fetchFeed();
+    const id = setInterval(fetchFeed, 30000);
+    return () => clearInterval(id);
+  }, [username]);
+
+  // (Re)fetch personal stats whenever the You tab is shown or the feed changes.
+  useEffect(() => {
+    if (tab === "you" && username) fetchStats();
+  }, [tab, feed, username]);
+
+  async function addLog(payload) {
+    setSaving(true);
+    try {
+      await fetch(API + "/logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logId: crypto.randomUUID(), userId, username, ...payload }),
+      });
+      setSheet(false);
+      setTab("feed");
+      flash("Logged! 💩");
+      await fetchFeed();
+    } catch (err) {
+      console.error("Poopva: failed to save log", err);
+      flash("Couldn’t save — try again");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteLog(logId) {
+    setFeed(prev => prev.filter(l => l.logId !== logId)); // optimistic
+    try {
+      await fetch(API + "/logs/" + logId, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      flash("Removed");
+    } catch (err) {
+      console.error("Poopva: failed to delete", err);
+    }
+    fetchFeed();
+  }
+
+  function togglePoodos(logId) {
+    setFeed(prev => prev.map(l => {
+      if (l.logId !== logId) return l;
+      const has = (l.poodos || []).includes(userId);
+      return { ...l, poodos: has ? l.poodos.filter(u => u !== userId) : [...(l.poodos || []), userId] };
+    }));
+    fetch(API + "/logs/" + logId + "/poodo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    }).catch(err => { console.error("Poopva: failed to poodo", err); fetchFeed(); });
+  }
+
+  async function addComment(logId, text) {
+    const t = text.trim();
+    if (!t) return;
+    setFeed(prev => prev.map(l => l.logId === logId
+      ? { ...l, comments: [...(l.comments || []), { userId, username, text: t, createdAt: new Date().toISOString() }] }
+      : l));
+    try {
+      await fetch(API + "/logs/" + logId + "/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, username, text: t }),
+      });
+    } catch (err) {
+      console.error("Poopva: failed to comment", err);
+    }
+    fetchFeed();
+  }
+
+  function chooseName(name) {
+    localStorage.setItem(LS_NAME, name);
+    setIdentity({ userId, username: name });
+  }
+
+  // First launch — collect a username before showing the app.
+  if (!username) return e(NameModal, { onSubmit: chooseName });
+
+  const myLogs = feed.filter(l => l.userId === userId);
+
+  return e("div", { className: "min-h-screen w-full", style: { background: CREAM, fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" } },
+    e("div", { className: "mx-auto flex min-h-screen max-w-md flex-col" },
+      e("header", { className: "sticky top-0 z-30 border-b border-stone-200 bg-white/90 px-4 py-3 backdrop-blur" },
+        e("div", { className: "flex items-center gap-2" },
+          e("span", { className: "text-2xl" }, "💩"),
+          e("span", { className: "text-xl font-extrabold tracking-tight", style: { color: BRAND_DARK } }, "Poopva"),
+          e("span", { className: "ml-1 mt-0.5 text-xs font-medium text-stone-400" }, "Share every movement"),
+          e("div", { className: "flex-1" }),
+          e("span", { className: "text-xs font-semibold text-stone-500" }, "Hi, ", username))),
+      e("main", { className: "flex-1 px-4 pb-28 pt-4" },
+        tab === "feed" && (loading
+          ? e(Spinner, { note: "Loading the feed…" })
+          : e("div", { className: "space-y-4" },
+              feed.length === 0 && e("div", { className: "rounded-3xl border border-dashed border-stone-300 bg-white p-5 text-center" },
+                e("div", { className: "text-3xl" }, "🚽"),
+                e("div", { className: "mt-1 font-bold text-stone-800" }, "No logs yet"),
+                e("p", { className: "mt-0.5 text-sm text-stone-500" }, "Tap the ＋ to record the very first movement. The feed is all yours — for now.")),
+              feed.map(l => e(Card, {
+                key: l.logId,
+                log: l,
+                mine: l.userId === userId,
+                given: (l.poodos || []).includes(userId),
+                onPoodos: togglePoodos,
+                onComment: addComment,
+                onDelete: deleteLog,
+              })))),
+        tab === "bristol" && e(BristolView, null),
+        tab === "you" && e(StatsView, { stats, myLogs, username })),
+      e("nav", { className: "fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md border-t border-stone-200 bg-white" },
+        e("div", { className: "grid grid-cols-4 items-end px-2 pb-2 pt-1.5" },
+          e(NavBtn, { active: tab === "feed", onClick: () => setTab("feed"), icon: e(Home, { size: 22 }), label: "Feed" }),
+          e(NavBtn, { active: tab === "bristol", onClick: () => setTab("bristol"), icon: e(BookOpen, { size: 22 }), label: "Bristol" }),
+          e("div", { className: "flex justify-center" },
+            e("button", { onClick: () => setSheet(true), className: "-mt-6 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg active:scale-95", style: { background: BRAND }, "aria-label": "Log a poop" }, e(Plus, { size: 28 }))),
+          e(NavBtn, { active: tab === "you", onClick: () => setTab("you"), icon: e(User, { size: 22 }), label: "You" }))),
+      toast && e("div", { className: "fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-lg", style: { background: BRAND_DARK } }, toast),
+      sheet && e(LogSheet, { onSave: addLog, onClose: () => setSheet(false), saving })));
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(e(App, null));
+  </script>
+</body>
+</html>

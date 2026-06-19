@@ -8,6 +8,8 @@ const fs = require("fs");
 
 // Import the Submission model
 const Submission = require("./models/datasetObject.model.js");
+// Poopva uses a plain JSON file for persistence (no MongoDB).
+const { readDb, writeDb } = require("./src/poopvaDb.js");
 const mongoose = require("mongoose");
 const dbURI = process.env.MONGO_URI;
 
@@ -82,6 +84,190 @@ app.get("/", (req, res) => {
     });
   });
 });
+
+// ===================== Poopva API =====================
+// All routes are defined BEFORE the "/:appName" catch-all so Express
+// matches them first. Poopva is "Strava, but for pooping" — multi-user,
+// backed by a plain JSON file (data/poopva.json) via readDb/writeDb.
+
+// GET all logs, newest first, capped at 100.
+app.get("/api/poopva/logs", (req, res) => {
+  try {
+    const db = readDb();
+    const logs = [...db.logs]
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, 100);
+    res.json(logs);
+  } catch (err) {
+    console.error("Poopva: error fetching logs:", err);
+    res.status(500).json({ error: "Failed to fetch logs" });
+  }
+});
+
+// POST a new log.
+app.post("/api/poopva/logs", (req, res) => {
+  try {
+    const {
+      logId,
+      userId,
+      username,
+      bristolType,
+      feeling,
+      duration,
+      spot,
+      notes,
+      photoBase64,
+      timestamp,
+    } = req.body;
+
+    if (!logId || !userId || !username || !bristolType) {
+      return res
+        .status(400)
+        .json({ error: "Missing required fields (logId, userId, username, bristolType)" });
+    }
+
+    const db = readDb();
+    const log = {
+      logId,
+      userId,
+      username,
+      bristolType,
+      feeling: feeling || "",
+      duration: duration || "",
+      spot: spot || "",
+      notes: notes || "",
+      photoBase64: photoBase64 || null,
+      timestamp: timestamp || new Date().toISOString(),
+      poodos: [],
+      comments: [],
+    };
+
+    db.logs.push(log);
+    writeDb(db);
+    res.status(201).json(log);
+  } catch (err) {
+    console.error("Poopva: error creating log:", err);
+    res.status(500).json({ error: "Failed to create log" });
+  }
+});
+
+// DELETE a log — only the owner may remove it.
+app.delete("/api/poopva/logs/:logId", (req, res) => {
+  try {
+    const { userId } = req.body || {};
+    const db = readDb();
+    const log = db.logs.find((l) => l.logId === req.params.logId);
+    if (!log) return res.status(404).json({ error: "Log not found" });
+    if (log.userId !== userId) {
+      return res.status(403).json({ error: "You can only delete your own logs" });
+    }
+    db.logs = db.logs.filter((l) => l.logId !== req.params.logId);
+    writeDb(db);
+    res.json({ message: "Deleted", logId: req.params.logId });
+  } catch (err) {
+    console.error("Poopva: error deleting log:", err);
+    res.status(500).json({ error: "Failed to delete log" });
+  }
+});
+
+// POST toggle a Poodo (kudos). Add userId if absent, remove if present.
+app.post("/api/poopva/logs/:logId/poodo", (req, res) => {
+  try {
+    const { userId } = req.body || {};
+    if (!userId) return res.status(400).json({ error: "Missing userId" });
+    const db = readDb();
+    const log = db.logs.find((l) => l.logId === req.params.logId);
+    if (!log) return res.status(404).json({ error: "Log not found" });
+
+    if (!Array.isArray(log.poodos)) log.poodos = [];
+    const idx = log.poodos.indexOf(userId);
+    if (idx >= 0) {
+      log.poodos.splice(idx, 1);
+    } else {
+      log.poodos.push(userId);
+    }
+    writeDb(db);
+    res.json(log);
+  } catch (err) {
+    console.error("Poopva: error toggling poodo:", err);
+    res.status(500).json({ error: "Failed to toggle poodo" });
+  }
+});
+
+// POST add a comment.
+app.post("/api/poopva/logs/:logId/comments", (req, res) => {
+  try {
+    const { userId, username, text } = req.body || {};
+    if (!userId || !username || !text || !text.trim()) {
+      return res.status(400).json({ error: "Missing userId, username, or text" });
+    }
+    const db = readDb();
+    const log = db.logs.find((l) => l.logId === req.params.logId);
+    if (!log) return res.status(404).json({ error: "Log not found" });
+
+    if (!Array.isArray(log.comments)) log.comments = [];
+    log.comments.push({
+      userId,
+      username,
+      text: text.trim(),
+      createdAt: new Date().toISOString(),
+    });
+    writeDb(db);
+    res.json(log);
+  } catch (err) {
+    console.error("Poopva: error adding comment:", err);
+    res.status(500).json({ error: "Failed to add comment" });
+  }
+});
+
+// GET aggregate stats for one user.
+app.get("/api/poopva/users/:userId/stats", (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const db = readDb();
+    const logs = db.logs.filter((l) => l.userId === userId);
+
+    const totalLogs = logs.length;
+    const totalPoodos = logs.reduce(
+      (s, l) => s + (l.poodos ? l.poodos.length : 0),
+      0
+    );
+
+    // Day-by-day streak ending today.
+    const dayKey = (d) =>
+      d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+    const days = new Set(logs.map((l) => dayKey(new Date(l.timestamp))));
+    let streak = 0;
+    const cur = new Date();
+    while (days.has(dayKey(cur))) {
+      streak++;
+      cur.setDate(cur.getDate() - 1);
+    }
+
+    const weekAgo = Date.now() - 7 * 864e5;
+    const weekCount = logs.filter(
+      (l) => new Date(l.timestamp).getTime() >= weekAgo
+    ).length;
+
+    const counts = {};
+    for (let t = 1; t <= 7; t++) counts[t] = 0;
+    logs.forEach((l) => {
+      if (l.bristolType >= 1 && l.bristolType <= 7) {
+        counts[l.bristolType]++;
+      }
+    });
+    const bristolBreakdown = [];
+    for (let t = 1; t <= 7; t++) {
+      bristolBreakdown.push({ type: t, count: counts[t] });
+    }
+
+    res.json({ totalLogs, totalPoodos, streak, weekCount, bristolBreakdown });
+  } catch (err) {
+    console.error("Poopva: error fetching stats:", err);
+    res.status(500).json({ error: "Failed to fetch stats" });
+  }
+});
+// =================== End Poopva API ===================
 
 app.get("/:appName", function (request, response) {
   const appName = request.params.appName;
@@ -169,6 +355,20 @@ app.get("/:appName", function (request, response) {
         );
 
       response.send(updatedHtml);
+      return;
+    });
+  } else if (appName == "Poopva") {
+    // Poopva is a complete standalone HTML app — serve it directly.
+    const indexPath = path.join(__dirname, "src", "views", "poopva.html");
+
+    fs.readFile(indexPath, "utf8", (err, data) => {
+      if (err) {
+        console.error("Error reading poopva.html:", err);
+        response.status(500).send("Internal Server Error");
+        return;
+      }
+
+      response.send(data);
       return;
     });
   } else {
