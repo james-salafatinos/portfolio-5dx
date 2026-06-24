@@ -52,6 +52,11 @@ function _initRenderer() {
     return;
   }
 
+  // Anchor absolutely-positioned overlays (legend, tooltip) to the canvas area
+  // so they clip to the map and stay visible on mobile (a page header sits
+  // above the canvas, so a viewport-fixed legend would fall off-screen).
+  container.style.position = "relative";
+
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
@@ -129,12 +134,12 @@ function _makeTooltip(container) {
   const el = document.createElement("div");
   el.id = "suburb-tooltip";
   el.style.cssText = `
-    position:fixed; display:none; pointer-events:none; z-index:1000;
+    position:absolute; display:none; pointer-events:none; z-index:10;
     background:#111827; color:#ffffff; border:1px solid #374151;
     border-radius:12px; padding:14px; min-width:200px;
     font-family:-apple-system,Segoe UI,Roboto,sans-serif;
     box-shadow:0 8px 30px rgba(0,0,0,0.55);`;
-  document.body.appendChild(el);
+  container.appendChild(el);
   return el;
 }
 

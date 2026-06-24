@@ -444,8 +444,10 @@ class Game {
       const rect = el.getBoundingClientRect();
       this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      this.mouseClient.x = e.clientX;
-      this.mouseClient.y = e.clientY;
+      // Container-relative: the tooltip is position:absolute inside #threejs
+      // (which fills the canvas, so rect.left/top is the container origin).
+      this.mouseClient.x = e.clientX - rect.left;
+      this.mouseClient.y = e.clientY - rect.top;
     });
     el.addEventListener("mouseleave", () => {
       this.pointer.set(-2, -2);
