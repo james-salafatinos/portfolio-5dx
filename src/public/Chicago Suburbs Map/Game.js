@@ -148,7 +148,7 @@ class Game {
 
     this._computeStats();
     this._project();
-    this._buildGrid();
+    this._buildTiles();
     this._buildSuburbs();
     this._initPointer();
 
@@ -182,6 +182,9 @@ class Game {
     const cosLat = Math.cos((centerLat * Math.PI) / 180);
     const SCALE = 1400; // world units per degree of latitude
 
+    // Stash projection params so the OSM tile backdrop maps lat/lng identically.
+    this.proj = { centerLat, centerLng, cosLat, SCALE };
+
     this.positions = SUBURBS.map((s) => ({
       x: (s.lng - centerLng) * cosLat * SCALE,
       y: (s.lat - centerLat) * SCALE,
@@ -204,31 +207,79 @@ class Game {
     return 14 + t * (50 - 14);
   }
 
-  // ── Faint canvas grid backdrop ────────────────────────────────────────────
-  _buildGrid() {
-    const b = this.bounds;
-    const w = (b.maxX - b.minX) * 1.6;
-    const h = (b.maxY - b.minY) * 1.6;
+  // ── lat/lng → world XY using the same projection as the suburb hexes ───────
+  _latLngToWorld(lat, lng) {
+    const { centerLat, centerLng, cosLat, SCALE } = this.proj;
+    return {
+      x: (lng - centerLng) * cosLat * SCALE,
+      y: (lat - centerLat) * SCALE,
+    };
+  }
 
-    const c = document.createElement("canvas");
-    c.width = 1024; c.height = 1024;
-    const ctx = c.getContext("2d");
-    ctx.clearRect(0, 0, 1024, 1024);
-    ctx.strokeStyle = "rgba(26,37,64,1)";
-    ctx.lineWidth = 1.5;
-    const step = 1024 / 24;
-    for (let i = 0; i <= 24; i++) {
-      const p = Math.round(i * step) + 0.5;
-      ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 1024); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(1024, p); ctx.stroke();
+  // ── OpenStreetMap tile backdrop (dark-mode look) ──────────────────────────
+  _buildTiles() {
+    const Z = 11, N = Math.pow(2, Z);
+
+    // Web Mercator: lat/lng → fractional tile coords at zoom Z.
+    const lngToTileX = (lng) => (lng + 180) / 360 * N;
+    const latToTileY = (lat) => {
+      const r = (lat * Math.PI) / 180;
+      return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * N;
+    };
+    // Tile (x or y index) → lng / lat of its top-left corner.
+    const tileXToLng = (x) => (x / N) * 360 - 180;
+    const tileYToLat = (y) => (Math.atan(Math.sinh(Math.PI * (1 - 2 * y / N))) * 180) / Math.PI;
+
+    // Bounding box covering all suburbs (with margin), + 1 tile of padding.
+    const BB = { latMin: 41.4, latMax: 42.5, lngMin: -88.55, lngMax: -87.60 };
+    const xMin = Math.floor(lngToTileX(BB.lngMin)) - 1;
+    const xMax = Math.floor(lngToTileX(BB.lngMax)) + 1;
+    // y grows southward, so latMax gives the smaller y.
+    const yMin = Math.floor(latToTileY(BB.latMax)) - 1;
+    const yMax = Math.floor(latToTileY(BB.latMin)) + 1;
+
+    const loader = new THREE.TextureLoader();
+    loader.crossOrigin = "anonymous";
+
+    for (let x = xMin; x <= xMax; x++) {
+      for (let y = yMin; y <= yMax; y++) {
+        const latTop = tileYToLat(y);
+        const latBottom = tileYToLat(y + 1);
+        const lngLeft = tileXToLng(x);
+        const lngRight = tileXToLng(x + 1);
+
+        const tl = this._latLngToWorld(latTop, lngLeft);
+        const br = this._latLngToWorld(latBottom, lngRight);
+        const w = br.x - tl.x;
+        const h = tl.y - br.y;
+        const cx = (tl.x + br.x) / 2;
+        const cy = (tl.y + br.y) / 2;
+
+        const tex = loader.load(`https://tile.openstreetmap.org/${Z}/${x}/${y}.png`);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const mat = new THREE.MeshBasicMaterial({ map: tex, depthTest: false, depthWrite: false });
+        const tile = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+        tile.position.set(cx, cy, -10);
+        tile.renderOrder = -1;
+        this.scene.add(tile);
+      }
     }
-    const tex = new THREE.CanvasTexture(c);
-    const plane = new THREE.Mesh(
-      new THREE.PlaneGeometry(w, h),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.12, depthWrite: false })
+
+    // Dark overlay so hexes pop — sits above the tiles, below the hexes.
+    const left = this._latLngToWorld(0, BB.lngMin - 0.1).x;
+    const right = this._latLngToWorld(0, BB.lngMax + 0.1).x;
+    const bottom = this._latLngToWorld(BB.latMin - 0.1, 0).y;
+    const top = this._latLngToWorld(BB.latMax + 0.1, 0).y;
+    const overlay = new THREE.Mesh(
+      new THREE.PlaneGeometry(right - left, top - bottom),
+      new THREE.MeshBasicMaterial({
+        color: 0x000000, transparent: true, opacity: 0.45,
+        depthTest: false, depthWrite: false,
+      })
     );
-    plane.position.set(b.centerX, b.centerY, -5);
-    this.scene.add(plane);
+    overlay.position.set((left + right) / 2, (top + bottom) / 2, -9);
+    overlay.renderOrder = -0.5;
+    this.scene.add(overlay);
   }
 
   // ── Build hex fill + glow + stroke + label for each suburb ─────────────────
@@ -348,47 +399,41 @@ class Game {
     for (const rec of this.records) rec.glow.visible = b;
   }
 
-  // ── Legend overlay (gradient bar + min/max) ───────────────────────────────
+  // ── Compact horizontal legend (tiny title + gradient strip + min/max) ──────
   _updateLegend() {
     if (!this.legendEl) return;
     const layer = LAYERS[this.activeLayer];
 
-    const barH = 200, barW = 24;
+    const barW = 160, barH = 14;
     const cv = document.createElement("canvas");
     cv.width = barW; cv.height = barH;
     const ctx = cv.getContext("2d");
-    for (let y = 0; y < barH; y++) {
-      const t = 1 - y / (barH - 1); // top = high
+    for (let x = 0; x < barW; x++) {
+      const t = x / (barW - 1); // left = low, right = high
       const col = interpolateColor(t, layer.stops);
       ctx.fillStyle = `rgb(${Math.round(col.r * 255)},${Math.round(col.g * 255)},${Math.round(col.b * 255)})`;
-      ctx.fillRect(0, y, barW, 1);
+      ctx.fillRect(x, 0, 1, barH);
     }
 
-    let topLabel, midLabel, botLabel;
+    let lowLabel, highLabel;
     if (layer.diverging) {
-      topLabel = pctFmt(layer.divMax);
-      midLabel = pctFmt(layer.divMid);
-      botLabel = pctFmt(layer.divMin);
+      lowLabel = pctFmt(layer.divMin);
+      highLabel = pctFmt(layer.divMax);
     } else {
       const st = this.stats[layer.field];
-      topLabel = layer.fmt(st.max);
-      botLabel = layer.fmt(st.min);
-      midLabel = null;
+      lowLabel = layer.fmt(st.min);
+      highLabel = layer.fmt(st.max);
     }
 
     this.legendEl.innerHTML = `
-      <div style="font-size:12px;font-weight:700;color:#f9fafb;margin-bottom:8px;letter-spacing:.3px;">
+      <div style="font-size:11px;font-weight:700;color:#f9fafb;margin-bottom:4px;text-align:center;">
         ${layer.icon} ${layer.label}
       </div>
-      <div style="display:flex;gap:10px;align-items:stretch;">
-        <img src="${cv.toDataURL()}" width="${barW}" height="${barH}"
-             style="border-radius:5px;border:1px solid #2a3550;display:block;"/>
-        <div style="display:flex;flex-direction:column;justify-content:space-between;
-                    font-size:11px;color:#cbd5e1;padding:1px 0;">
-          <span>${topLabel}</span>
-          ${midLabel !== null ? `<span style="color:#94a3b8;">${midLabel}</span>` : ""}
-          <span>${botLabel}</span>
-        </div>
+      <img src="${cv.toDataURL()}" width="${barW}" height="${barH}"
+           style="display:block;border-radius:3px;"/>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#cbd5e1;margin-top:2px;">
+        <span>${lowLabel}</span>
+        <span>${highLabel}</span>
       </div>`;
   }
 

@@ -79,6 +79,11 @@ function _initControls() {
     MIDDLE: THREE.MOUSE.DOLLY,
     RIGHT: THREE.MOUSE.PAN,
   };
+  // Mobile: one finger pans, two fingers pinch-zoom + pan.
+  controls.touches = {
+    ONE: THREE.TOUCH.PAN,
+    TWO: THREE.TOUCH.DOLLY_PAN,
+  };
 }
 
 // Build the Game (and thus geometry) here so bounds exist, then frame them.
@@ -137,9 +142,9 @@ function _makeLegend(container) {
   const el = document.createElement("div");
   el.id = "suburb-legend";
   el.style.cssText = `
-    position:absolute; left:18px; bottom:22px; z-index:10;
-    background:rgba(17,24,39,0.82); border:1px solid #2a3550;
-    border-radius:12px; padding:14px 16px; backdrop-filter:blur(8px);
+    position:absolute; left:50%; bottom:12px; transform:translateX(-50%);
+    z-index:10; width:180px; background:rgba(10,14,26,0.82);
+    border-radius:8px; padding:6px 10px;
     font-family:-apple-system,Segoe UI,Roboto,sans-serif;`;
   container.appendChild(el);
   return el;
