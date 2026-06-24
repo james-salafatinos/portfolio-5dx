@@ -12,6 +12,10 @@ const guiParams = {
   showGlow: true,
 };
 
+// Camera-fit state — declared before create() runs to avoid a temporal-dead-zone
+// access (create() → _fitCamera() assigns these during module evaluation).
+let _worldW = 1000, _worldH = 1000, _centerX = 0, _centerY = 0;
+
 create();
 
 function create() {
@@ -101,8 +105,6 @@ function _fitCamera() {
   _applyFrustum(container.clientWidth / container.clientHeight);
   controls.update();
 }
-
-let _worldW = 1000, _worldH = 1000, _centerX = 0, _centerY = 0;
 
 function _applyFrustum(aspect) {
   // Expand the world box to match viewport aspect with 10% padding preserved.
