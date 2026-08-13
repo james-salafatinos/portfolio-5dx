@@ -7,27 +7,21 @@ const BOUND = 50;
 // considered to "touch" that side, used for percolation detection.
 const TOUCH_EPS = 2;
 
-// 17 deterministic "static" sites, hand-placed across [-40, 40]^2 so the
-// tessellation is stable across reloads (no Math.random()).
-const STATIC_SITES = [
-  { x: -38, y: 34 },
-  { x: -12, y: 40 },
-  { x: 22, y: 37 },
-  { x: 39, y: 20 },
-  { x: 6, y: 24 },
-  { x: -28, y: 12 },
-  { x: 34, y: -4 },
-  { x: 12, y: -2 },
-  { x: -6, y: -18 },
-  { x: -35, y: -14 },
-  { x: -20, y: -36 },
-  { x: 4, y: -38 },
-  { x: 28, y: -30 },
-  { x: 40, y: -40 },
-  { x: 18, y: 8 },
-  { x: -40, y: -38 },
-  { x: -18, y: 20 },
-];
+// Seeded LCG PRNG — deterministic, no Math.random()
+function seededRandom(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 0xffffffff;
+  };
+}
+
+const N_STATIC = 180;
+const _rng = seededRandom(42);
+const STATIC_SITES = Array.from({ length: N_STATIC }, () => ({
+  x: _rng() * 88 - 44,
+  y: _rng() * 88 - 44,
+}));
 
 // Number of animated Lissajous sites appended after the static ones.
 const N_ANIMATED = 3;

@@ -6,7 +6,7 @@ This visualization brings together two ideas from earlier projects — the
 **Voronoi tessellation / Delaunay graph** and **percolation via Union-Find
 coloring** — into a single continuum-percolation demo.
 
-Space is partitioned into ~20 Voronoi cells (17 fixed sites plus 3 slowly
+Space is partitioned into 183 Voronoi cells (180 static sites plus 3 slowly
 drifting Lissajous points). Each cell is assigned a fixed random *threshold*
 `u ∈ Uniform(0, 1)` once, at construction. A global probability `p` (the
 slider) then decides which cells are **open**: a cell is open when `u ≤ p`.
@@ -43,7 +43,7 @@ realized on the random Voronoi/Delaunay graph rather than a regular lattice.
   gets **Voronoi percolation**. Bollobás & Riordan (2006) proved that for this
   2D model the critical probability is exactly **`p_c = 1/2`**, mirroring the
   square lattice — a consequence of a self-duality argument (the closed cells
-  percolate exactly when the open ones don't). With only ~20 sites clipped to a
+  percolate exactly when the open ones don't). With only ~183 sites clipped to a
   finite box, this demo won't nail `1/2` precisely — finite-size effects and a
   deterministic (non-Poisson) site layout shift the apparent threshold — but
   the qualitative behavior is unmistakable: nothing spans, then suddenly
@@ -56,8 +56,8 @@ realized on the random Voronoi/Delaunay graph rather than a regular lattice.
 
 ## How It Works
 
-**1. Sites and thresholds.** 17 static sites are hand-placed for a stable
-layout; 3 more move along Lissajous curves (pause them with Play/Pause). Every
+**1. Sites and thresholds.** 180 static sites are generated deterministically
+via a seeded LCG PRNG (seed 42) across [-44, 44]²; 3 more move along Lissajous curves (pause them with Play/Pause). Every
 site gets a fixed `u ~ Uniform(0,1)` — these are the "coin flips" and they do
 **not** change when you move `p`. Only *Regenerate* draws fresh values.
 
