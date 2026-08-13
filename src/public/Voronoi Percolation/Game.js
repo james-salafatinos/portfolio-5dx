@@ -7,25 +7,6 @@ const BOUND = 50;
 // considered to "touch" that side, used for percolation detection.
 const TOUCH_EPS = 2;
 
-// Seeded LCG PRNG — deterministic, no Math.random()
-function seededRandom(seed) {
-  let s = seed;
-  return function() {
-    s = (s * 1664525 + 1013904223) & 0xffffffff;
-    return (s >>> 0) / 0xffffffff;
-  };
-}
-
-const N_STATIC = 180;
-const _rng = seededRandom(42);
-const STATIC_SITES = Array.from({ length: N_STATIC }, () => ({
-  x: _rng() * 88 - 44,
-  y: _rng() * 88 - 44,
-}));
-
-// Number of animated Lissajous sites appended after the static ones.
-const N_ANIMATED = 3;
-
 // ---------------------------------------------------------------------------
 // Union-Find (path compression + union by rank) — inlined from the
 // "Phase Transitions, Percolation, and Union Find Coloring" project.
@@ -67,15 +48,13 @@ class Game {
     this.scene = scene;
     this.controls = controls; // shared GUI state object
 
-    this.N = STATIC_SITES.length + N_ANIMATED;
     this.time = 0;
     this.lastNow = null;
     this.playing = true;
+    this._dt = 0;
 
-    // Fixed random threshold u ~ Uniform(0,1) per site. These NEVER change
-    // when p changes — only on construction or an explicit regenerate().
-    this.thresholds = new Float32Array(this.N);
-    for (let i = 0; i < this.N; i++) this.thresholds[i] = Math.random();
+    // Sites, thresholds, and per-site motion parameters.
+    this._initSites();
 
     // ---- Open Voronoi cells (vertex-colored by connected component) ----
     this.cellGeom = new THREE.BufferGeometry();
@@ -138,6 +117,52 @@ class Game {
     this.statsDiv = document.getElementById("percolation-stats");
   }
 
+  // Allocate sites, thresholds, and per-site motion parameters based on
+  // the current N control. Called on construction and whenever N changes.
+  _initSites() {
+    const N = this.controls.N;
+    this.N = N;
+
+    // Fixed random threshold u ~ Uniform(0,1) per site. These NEVER change
+    // when p changes — only on construction, reinit, or a regenerate().
+    this.thresholds = new Float32Array(N);
+    for (let i = 0; i < N; i++) this.thresholds[i] = Math.random();
+
+    // ---- Lissajous parameters (one per site) ----
+    this.lissA = new Float32Array(N);   // x amplitude ∈ [10, 45]
+    this.lissAy = new Float32Array(N);  // y amplitude ∈ [10, 45]
+    this.lissWx = new Float32Array(N);  // x angular freq ∈ [0.3, 1.5]
+    this.lissWy = new Float32Array(N);  // y angular freq ∈ [0.3, 1.5]
+    this.lissPhiX = new Float32Array(N); // x phase ∈ [0, 2π]
+    this.lissPhiY = new Float32Array(N); // y phase ∈ [0, 2π]
+    for (let i = 0; i < N; i++) {
+      this.lissA[i] = 10 + Math.random() * 35;
+      this.lissAy[i] = 10 + Math.random() * 35;
+      this.lissWx[i] = 0.3 + Math.random() * 1.2;
+      this.lissWy[i] = 0.3 + Math.random() * 1.2;
+      this.lissPhiX[i] = Math.random() * Math.PI * 2;
+      this.lissPhiY[i] = Math.random() * Math.PI * 2;
+    }
+
+    // ---- Random walk state (position + velocity per site) ----
+    this.wx = new Float32Array(N);
+    this.wy = new Float32Array(N);
+    this.wvx = new Float32Array(N); // starts at zero
+    this.wvy = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      this.wx[i] = Math.random() * 80 - 40;
+      this.wy[i] = Math.random() * 80 - 40;
+    }
+
+    this.time = 0;
+  }
+
+  // Rebuild the site set for a new N, then regenerate thresholds/time.
+  reinit() {
+    this._initSites();
+    this.regenerate();
+  }
+
   // Reassign all thresholds and reset time. Called by the GUI "Regenerate".
   regenerate() {
     for (let i = 0; i < this.N; i++) this.thresholds[i] = Math.random();
@@ -146,30 +171,51 @@ class Game {
 
   // Return the full list of {x,y} sites at the current time.
   _sites() {
-    const speed = this.controls.Speed;
-    const t = this.time;
-    const sites = STATIC_SITES.map((p) => ({ x: p.x, y: p.y }));
+    const N = this.N;
 
-    // Point A
-    sites.push({
-      x: 15 * Math.sin(t * speed * 0.7 + 0.0),
-      y: 20 * Math.cos(t * speed * 0.5 + 1.0),
-    });
-    // Point B
-    sites.push({
-      x: -10 * Math.sin(t * speed * 0.4 + 2.0),
-      y: -15 * Math.cos(t * speed * 0.9 + 0.5),
-    });
-    // Point C
-    sites.push({
-      x: 25 * Math.cos(t * speed * 0.6 + 3.0),
-      y: 5 * Math.sin(t * speed * 0.8 + 1.5),
-    });
+    if (this.controls.Motion === "Lissajous") {
+      const speed = this.controls.Speed;
+      const t = this.time;
+      const sites = new Array(N);
+      for (let i = 0; i < N; i++) {
+        sites[i] = {
+          x: this.lissA[i] * Math.sin(this.lissWx[i] * t * speed + this.lissPhiX[i]),
+          y: this.lissAy[i] * Math.sin(this.lissWy[i] * t * speed + this.lissPhiY[i]),
+        };
+      }
+      return sites;
+    }
 
+    // Random Walk mode — integrate velocity-perturbed positions each frame.
+    const walkSpeed = this.controls["Walk Speed"];
+    const impulse = walkSpeed * 80;
+    const damping = 0.92;
+    const WALL = BOUND - 1;
+    const dt = this._dt;
+    const sites = new Array(N);
+    for (let i = 0; i < N; i++) {
+      this.wvx[i] += (Math.random() - 0.5) * impulse * dt;
+      this.wvy[i] += (Math.random() - 0.5) * impulse * dt;
+      this.wvx[i] *= damping;
+      this.wvy[i] *= damping;
+      this.wx[i] += this.wvx[i] * dt;
+      this.wy[i] += this.wvy[i] * dt;
+
+      // Bounce off walls.
+      if (this.wx[i] < -WALL) { this.wx[i] = -WALL; this.wvx[i] = Math.abs(this.wvx[i]); }
+      if (this.wx[i] >  WALL) { this.wx[i] =  WALL; this.wvx[i] = -Math.abs(this.wvx[i]); }
+      if (this.wy[i] < -WALL) { this.wy[i] = -WALL; this.wvy[i] = Math.abs(this.wvy[i]); }
+      if (this.wy[i] >  WALL) { this.wy[i] =  WALL; this.wvy[i] = -Math.abs(this.wvy[i]); }
+
+      sites[i] = { x: this.wx[i], y: this.wy[i] };
+    }
     return sites;
   }
 
   update() {
+    // Rebuild sites if N changed without going through onFinishChange.
+    if (this.controls.N !== this.N) this.reinit();
+
     // Advance time using a wall-clock delta so Speed scales real motion.
     const now = performance.now();
     if (this.lastNow === null) this.lastNow = now;
@@ -177,6 +223,7 @@ class Game {
     this.lastNow = now;
     this.playing = this.controls.Play;
     if (this.playing) this.time += dt;
+    this._dt = this.playing ? dt : 0;
 
     const sites = this._sites();
     const { triangles, verts } = triangulate(sites);
@@ -221,8 +268,8 @@ class Game {
       }
     }
 
-    // ---- Voronoi polygons (half-plane intersection) ----
-    const polygons = this._voronoiPolygons(sites);
+    // ---- Voronoi polygons (half-plane intersection, neighbors only) ----
+    const polygons = this._voronoiPolygons(sites, triangles, adjacency);
 
     // ---- Boundary-touch detection per component ----
     // Bit flags: 1=left, 2=right, 4=top, 8=bottom.
@@ -280,23 +327,29 @@ class Game {
   }
 
   // Compute every site's Voronoi polygon (clipped convex region).
-  _voronoiPolygons(sites) {
-    const box = [
-      { x: -BOUND, y: -BOUND },
-      { x: BOUND, y: -BOUND },
-      { x: BOUND, y: BOUND },
-      { x: -BOUND, y: BOUND },
-    ];
+  //
+  // A site's Voronoi cell is bounded only by the bisectors it shares with its
+  // Delaunay neighbors, so we clip against those ~6 neighbors instead of all
+  // N sites. This makes the pass O(N·K) ≈ O(N) rather than O(N²).
+  _voronoiPolygons(sites, triangles, adjacency) {
     const polygons = new Array(sites.length);
     for (let i = 0; i < sites.length; i++) {
       const s = sites[i];
-      let poly = box;
-      for (let j = 0; j < sites.length && poly.length; j++) {
-        if (i === j) continue;
-        const o = sites[j];
-        const n = { x: o.x - s.x, y: o.y - s.y };
-        const mid = { x: (s.x + o.x) / 2, y: (s.y + o.y) / 2 };
-        poly = clipHalfPlane(poly, mid, n);
+      let poly = [
+        { x: -BOUND, y: -BOUND },
+        { x: BOUND, y: -BOUND },
+        { x: BOUND, y: BOUND },
+        { x: -BOUND, y: BOUND },
+      ];
+      const nbrs = adjacency.get(i);
+      if (nbrs) {
+        for (const j of nbrs) {
+          if (!poly.length) break;
+          const o = sites[j];
+          const n = { x: o.x - s.x, y: o.y - s.y };
+          const mid = { x: (s.x + o.x) / 2, y: (s.y + o.y) / 2 };
+          poly = clipHalfPlane(poly, mid, n);
+        }
       }
       polygons[i] = poly;
     }

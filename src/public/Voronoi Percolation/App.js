@@ -13,6 +13,9 @@ const VIEW_HALF = 50;
 // Shared control object read by both the GUI and the Game each frame.
 const controlsState = {
   p: 0.5,
+  N: 200,
+  "Motion": "Random Walk", // options: ["Lissajous", "Random Walk"]
+  "Walk Speed": 1.0,
   Speed: 1.0,
   Play: true,
   Regenerate: () => {
@@ -145,6 +148,11 @@ function _initGUI() {
   const gui = new GUI({ container: guiContainer });
 
   gui.add(controlsState, "p", 0.0, 1.0, 0.01).name("p (threshold)");
+  gui.add(controlsState, "N", 20, 2000, 1).name("N (sites)").onFinishChange(() => {
+    if (game) game.reinit();
+  });
+  gui.add(controlsState, "Motion", ["Lissajous", "Random Walk"]).name("Motion Mode");
+  gui.add(controlsState, "Walk Speed", 0.1, 10.0, 0.1).name("Walk Speed");
   gui.add(controlsState, "Speed", 0.1, 5.0, 0.1).name("Speed");
   gui.add(controlsState, "Play").name("Play / Pause");
   gui.add(controlsState, "Regenerate").name("Regenerate");
